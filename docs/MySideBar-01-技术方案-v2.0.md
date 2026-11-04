@@ -503,6 +503,28 @@ def undo(records) -> (reverted, failed_path)
 
 **视图重定向**：`moved_pairs()` 过滤掉 `temp_in` 记录，只暴露「原始路径 → 终态路径」，中间名永不进入 retarget 输入。
 
+**中间名链路的记录折叠（实测缺陷修复）**：
+
+`needs_temp` 项的记录链是 `temp_in(abc.txt → staged)` + `temp_out(staged → ABC.txt)`。若撤销按记录**原样逆序回放**，会先尝试 `ABC.txt → staged`，而临时区已在 `_cleanup_temp` 中被删除，路径不存在，撤销立即中断。
+
+因此 `RenameRecord` 增加 `origin` 字段：
+
+- `temp_in` 记录保持 `source=原路径`、`target=staged`（保留真实执行轨迹，供回滚使用）
+- `temp_out` 记录写入 `origin=原路径`，即该链路的**逻辑起点**
+- `moved_pairs()` 与 `undo()` 统一按 `(origin or source, target)` 折叠，**一组中间名项只呈现一次逻辑移动**，临时路径永不外泄
+
+**跨文件系统大小写还原（实测缺陷修复）**：
+
+macOS 默认 APFS 大小写不敏感，`abc.txt` 与 `ABC.txt` 指向同一 inode、共享目录项。撤销时的「源已存在」守卫必须区分两种情形：
+
+| 情形 | 判定 | 处理 |
+|---|---|---|
+| 源路径与终态路径规范化后**字符串相同** | `os.path.normpath` 相等 | 无需 rename，直接计入还原数 |
+| 源路径与终态路径**同实体但大小写不同** | `os.path.samefile` 为真 | **必须执行 `os.rename`**，借此改写目录项大小写；跳过会让文件名停留在新的大小写 |
+| 源路径存在且确为**不同文件** | `samefile` 为假 | 判为冲突，中止撤销并保留日志 |
+
+推论：`lexists(origin)` 为真**不能**直接判为冲突；必须叠加 `samefile` 判定，否则大小写改名永远无法撤销。
+
 **规模策略**：上限 `batch_rename_max_items`（默认 5000），**同步执行**；超 2000 项时确认框提示预估耗时。不做异步，避免视图 retarget 时序竞态。
 
 ### 5.6 batch/rollback.py

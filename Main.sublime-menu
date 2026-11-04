@@ -8,7 +8,10 @@
 			{
 				"caption": "MySideBar",
 				"children": [
-					{ "caption": "Settings", "command": "open_file", "args": {"file": "${packages}/User/MySideBar.sublime-settings"} },
+					{ "caption": "Settings", "command": "edit_settings", "args": {
+						"base_file": "${packages}/MySideBar/MySideBar.sublime-settings",
+						"default": "// MySideBar user settings. Overrides appear below.\n{\n\t$0\n}\n"
+					} },
 					{ "caption": "Default Settings", "command": "open_file", "args": {"file": "${packages}/MySideBar/MySideBar.sublime-settings"} },
 					{ "caption": "-" },
 					{

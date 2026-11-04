@@ -125,7 +125,7 @@ def _execute(window, result):
 
     window.show_ok_cancel_dialog(
         i18n.t("rename.execute_confirm", count=len(actionable)),
-        i18n.t("rename.execute_all"),
+        i18n.t("rename.execute_all.caption"),
         on_confirm,
     )
 
@@ -245,7 +245,7 @@ class MySidebarRenameUndoCommand(sublime_plugin.WindowCommand):
 
         self.window.show_ok_cancel_dialog(
             i18n.t("rename.undo_confirm", count=len(ops)),
-            i18n.t("rename.undo_caption"),
+            i18n.t("rename.undo.caption"),
             on_confirm,
         )
 

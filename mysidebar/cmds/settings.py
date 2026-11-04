@@ -14,6 +14,9 @@ class MySidebarSetLanguageCommand(sublime_plugin.ApplicationCommand):
         if window is not None and applied and language != "en":
             window.status_message(i18n.t("lang.applied_hint"))
 
+    def is_enabled(self, language):
+        return language in i18n.languages()
+
     def is_checked(self, language):
         return i18n.get_language() == language
 
@@ -21,3 +24,6 @@ class MySidebarSetLanguageCommand(sublime_plugin.ApplicationCommand):
 class MySidebarApplyMenusCommand(sublime_plugin.ApplicationCommand):
     def run(self):
         i18n.apply_menu(force=True)
+
+    def is_enabled(self):
+        return True

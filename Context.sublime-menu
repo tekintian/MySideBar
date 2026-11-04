@@ -1,0 +1,6 @@
+[
+	{ "caption": "Execute All", "command": "my_sidebar_rename_execute_all", "context": [{"key": "mysidebar_rename_preview", "operator": "equal", "operand": true}] },
+	{ "caption": "Execute Selected", "command": "my_sidebar_rename_execute_selected", "context": [{"key": "mysidebar_rename_preview", "operator": "equal", "operand": true}] },
+	{ "caption": "-", "context": [{"key": "mysidebar_rename_preview", "operator": "equal", "operand": true}] },
+	{ "caption": "Undo Last Batch Rename", "command": "my_sidebar_rename_undo" }
+]

@@ -21,6 +21,7 @@ class RenameRecord:
     source: str
     target: str
     kind: str
+    origin: str = ""
 
 
 @dataclass
@@ -37,7 +38,12 @@ class ExecutionResult:
         return self.status == RESULT_OK
 
     def moved_pairs(self):
-        return [(r.source, r.target) for r in self.records if r.kind != STEP_TEMP_IN]
+        pairs = []
+        for record in self.records:
+            if record.kind == STEP_TEMP_IN:
+                continue
+            pairs.append((record.origin or record.source, record.target))
+        return pairs
 
 
 def build_steps(plan):
@@ -82,7 +88,7 @@ def execute(plan, retarget=None, record_log=True):
                     raise OSError("staged item missing")
                 target = _target_of(item, plan.base, dir_final)
                 _rename(source, target)
-                result.records.append(RenameRecord(source, target, STEP_TEMP_OUT))
+                result.records.append(RenameRecord(source, target, STEP_TEMP_OUT, origin=item.old_abs))
                 continue
             source = _source_of(item, plan.base, dir_final)
             target = _target_of(item, plan.base, dir_final)
@@ -129,22 +135,34 @@ def rollback(result):
 
 
 def undo(records):
+    pairs = []
+    for record in records:
+        if record.kind == STEP_TEMP_IN:
+            continue
+        pairs.append((record.origin or record.source, record.target))
     reverted = 0
     failed = ""
-    for record in reversed(records):
-        if not os.path.lexists(record.target):
-            failed = record.target
+    for origin, final in reversed(pairs):
+        if not os.path.lexists(final):
+            failed = final
             break
-        if os.path.lexists(record.source):
-            failed = record.source
+        if os.path.lexists(origin) and not _same_entity(origin, final):
+            failed = origin
             break
         try:
-            os.rename(record.target, record.source)
+            os.rename(final, origin)
         except OSError:
-            failed = record.target
+            failed = final
             break
         reverted += 1
     return reverted, failed
+
+
+def _same_entity(left, right):
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
 
 
 def _parent_final(item, base, dir_final):

@@ -15,14 +15,12 @@ def on_plugin_loaded():
         language = None
 
     i18n.set_language(language, persist=False)
+    i18n.apply_menu()
 
     if language is None:
         window = sublime.active_window()
         if window is not None:
             sublime.set_timeout(lambda: _prompt_language(window), 100)
-        return
-
-    i18n.apply_menu()
 
 
 def on_plugin_unloaded():
@@ -34,12 +32,24 @@ def _load_commands():
     for info in pkgutil.iter_modules(cmds.__path__):
         if info.ispkg:
             continue
-        importlib.import_module("%s.cmds.%s" % (__name__, info.name))
+        try:
+            importlib.import_module("%s.cmds.%s" % (__name__, info.name))
+        except Exception:
+            _report_import_failure(info.name)
+
+
+def _report_import_failure(name):
+    import traceback
+    print("[MySideBar] FAILED to load command module: %s" % name)
+    traceback.print_exc()
 
 
 def _refresh_rename_undo():
-    from .cmds import batch_rename
-    batch_rename.refresh_undo_cache()
+    try:
+        from .cmds import batch_rename
+        batch_rename.refresh_undo_cache()
+    except Exception:
+        _report_import_failure("batch_rename.refresh_undo_cache")
 
 
 def _prompt_language(window):

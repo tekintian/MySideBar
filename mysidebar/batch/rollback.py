@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import tempfile
 import time
 
@@ -68,7 +67,7 @@ def build_entry(result, base, timestamp=None):
     for record in result.records:
         if record.kind == STEP_TEMP_IN:
             continue
-        ops.append({"old": record.source, "new": record.target, "kind": record.kind})
+        ops.append({"old": record.origin or record.source, "new": record.target, "kind": record.kind})
     return {
         "version": LOG_VERSION,
         "timestamp": time.time() if timestamp is None else timestamp,
@@ -185,6 +184,10 @@ def _run_undo(ops):
     for op in reversed(ops):
         old = op["old"]
         new = op["new"]
+        if os.path.normpath(old) == os.path.normpath(new):
+            reverted += 1
+            pairs.append((new, old))
+            continue
         try:
             os.rename(new, old)
         except OSError as exc:

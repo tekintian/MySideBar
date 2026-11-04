@@ -215,6 +215,13 @@
 
 **已修复的测试侧缺陷**：`case` 用例原先复用 `cyc_root`，与 `swap`/`ring` 用例共享目录导致状态污染——macOS 大小写不敏感卷上残留 `X.txt` 使 `_validate_disk` 的 `_same_file` 放行分支命中，`needs_temp` 偶发保持 `False`。已改为独立 `case_root` 目录并追加 `status == STATUS_OK` 前置断言。
 
+**已修复的实现侧缺陷（`./tmp/` 实测发现）**：
+
+1. **中间名链路撤销断裂**：`needs_temp` 项产生 `temp_in(旧名→staged)` + `temp_out(staged→新名)` 两条记录。原 `undo()` 严格逆序回放，先做 `新名→staged`，而临时区已被 `_cleanup_temp` 删除，路径不存在 → 撤销立即返回失败、磁盘零改动。修复：`RenameRecord` 增加 `origin`，`temp_out` 写入逻辑起点，`moved_pairs()` / `undo()` / `rollback.build_entry()` 统一按 `(origin or source, target)` 折叠。
+2. **大小写还原被守卫误拦**：APFS 大小写不敏感，`abc.txt` 与 `ABC.txt` 同 inode 同目录项，`lexists(origin)` 为真被误判为「旧名被占用」。修复：守卫叠加 `os.path.samefile` 判定——同实体时**仍执行 `os.rename`** 以改写目录项大小写，仅当确为不同文件才判冲突。
+
+**回归断言（已加入 `_check.py`）**：`case undo count/no failure/tree`（进程内大小写撤销）、`undo case entry old/new`（日志折叠为真实原始路径）、`undo case status/reverted/tree`（跨进程大小写撤销且文件名真正改回）。
+
 ---
 
 ### T14 批量改名 rollback
@@ -261,14 +268,25 @@
 
 ---
 
-### T16 菜单资源
+### T16 菜单资源（已完成）
 
 | 项 | 内容 |
 |---|---|
-| 文件 | 包根：`Side Bar.sublime-menu`、`Tab Context.sublime-menu`、`Tab Sidebar Context.sublime-menu`、`Main.sublime-menu`、`Commands.sublime-commands` |
+| 文件 | 包根：`Side Bar.sublime-menu`、`Tab Context.sublime-menu`、`Tab Sidebar Context.sublime-menu`、`Main.sublime-menu`、`Context.sublime-menu`、`Commands.sublime-commands` |
 | 约束 | **全部必须在包根**，禁止放入 `menus/` 子目录（不会被加载且无报错）；**不提供** `Side Bar Mount Point.sublime-menu`（原生已含 `remove_folder`）；**不提供** 任何语言后缀菜单文件名（该机制不存在） |
 | 菜单项 | 仅列 C/D/B 类功能；A 类不出现 |
 | 通过标准 | 侧边栏右键出现新增项且与原生命中不重复；标签右键出现 3 项；命令面板可搜到全部命令；**确认 ST 实际加载了包根菜单文件** |
+
+**落地结论**：
+
+1. `Context.sublime-menu` 仅承载批量改名三项（`Execute All` / `Execute Selected` / `Undo Last Batch Rename`）。前两项与分隔符带 `context: [{"key": "mysidebar_rename_preview", "operator": "equal", "operand": true}]`，撤销项**不加 context**，保证普通文件视图右键也能撤销上一次批量改名。
+2. `Context.sublime-menu` 已加入 `i18n._MENU_TARGETS`，caption 随 `ui_language` 翻译；写入位置为 `Packages/User/MySideBar/`，与既有四份菜单同一机制。
+3. 翻译依赖 `_CAPTION_KEYS` 反查 `*.caption` 后缀键，故三语文案统一为 `rename.execute_all.caption` / `rename.execute_selection.caption` / `rename.undo.caption`，**英文原文必须与 strings 中的值逐字符一致**，否则该项静默保持英文。
+4. `Commands.sublime-commands` 补齐三条命令面板入口，caption 统一 `MySideBar: ...` 前缀，便于命令面板聚合检索。
+
+**自测覆盖（`_check.py` 菜单段）**：JSON 可解析、命令顺序为三项且与命令类名一致、3 项带 preview context 且 `operand` 为 `true`、撤销项无 context、三项 caption 均能在 `_CAPTION_KEYS` 反查到键、三语表全部含该键、`i18n._MENU_TARGETS` 已注册 `Context.sublime-menu`。
+
+**遗留说明**：菜单文件**实际加载效果**属 ST 运行时行为（需重启 ST 后人工确认右键菜单出现），离线自测只校验资源结构与翻译键完整性。
 
 ---
 

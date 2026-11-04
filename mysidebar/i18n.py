@@ -12,6 +12,10 @@ _MENU_TARGETS = (
     "Side Bar.sublime-menu",
     "Tab Context.sublime-menu",
     "Tab Sidebar Context.sublime-menu",
+    "Context.sublime-menu",
+)
+
+_STALE_MENU_TARGETS = (
     "Main.sublime-menu",
 )
 
@@ -139,14 +143,15 @@ def _shadow_enabled():
     try:
         from .cmds import shadow
         return shadow.enabled()
-    except ImportError as exc:
+    except Exception as exc:
         _report("shadow unavailable: %s" % exc)
         return False
 
 
 def _signature():
     shadow_flag = "1" if _shadow_enabled() else "0"
-    return "%s:%s:%s" % (_state["language"], sublime.version(), shadow_flag)
+    targets = ",".join(_MENU_TARGETS)
+    return "%s:%s:%s:%s" % (_state["language"], sublime.version(), shadow_flag, targets)
 
 
 def _transform_menu(node, translate, shadow):
@@ -191,14 +196,18 @@ def _is_separator(node):
 
 
 def _should_drop(command_name):
-    from .cmds import shadow
-    return shadow.should_drop(command_name)
+    try:
+        from .cmds import shadow
+        return shadow.should_drop(command_name)
+    except Exception as exc:
+        _report("shadow check failed: %s" % exc)
+        return False
 
 
 def _remove_user_menus(target_dir):
     if not os.path.isdir(target_dir):
         return
-    for name in _MENU_TARGETS:
+    for name in _MENU_TARGETS + _STALE_MENU_TARGETS:
         path = os.path.join(target_dir, name)
         if os.path.isfile(path):
             try:
