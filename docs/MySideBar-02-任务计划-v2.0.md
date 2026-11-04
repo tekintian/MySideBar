@@ -200,12 +200,20 @@
 
 | 项 | 内容 |
 |---|---|
+| 状态 | 已完成 |
 | 文件 | `mysidebar/batch/execute.py` |
-| 步骤 | Step0 中间名 → Step1 目录批逆序 → Step2 文件批 → Step3 中间名落地 → Step4 一次性 retarget → Step5 写日志 |
-| 正确性 | 目录批逆序保证子目录先改名；文件批在目录批之后保证 target 必终态；只做一次映射表 M |
-| 失败 | 任一步失败 → 停止 → 逆序回滚 → 上报 |
+| 结构 | `RenameRecord`（source/target/kind）、`ExecutionResult`（status/records/failure_*/temp_root + `done()`/`moved_pairs()`） |
+| 函数 | `build_steps`、`execute`、`rollback`、`undo` |
+| 步骤 | A `temp_in`（全部 needs_temp 项沉底）→ B `dir`（depth 逆序）→ C `file` → D `temp_out`（中间名落终态） |
+| 正确性 | needs_temp 先腾空旧名，temp_out 最后避免与普通项争抢；目录批逆序保证子目录先改名；文件批在目录批之后保证 target 必终态；落点用 `dir_final[rel_old]` 查表，祖先改名自动跟随 |
+| 原子性 | `_rename` 前置校验源与父目录，父目录缺失直接抛 `OSError`（禁止 `makedirs` 兜底）；任一步失败 → 逆序 `rollback` → `_cleanup_temp` → 返回 `aborted` |
+| 视图重定向 | `moved_pairs()` 过滤 `temp_in` 记录，中间名永不进入 retarget 输入 |
 | 规模 | 上限 `batch_rename_max_items`（5000），**同步执行**；超 2000 项确认框提示预估耗时 |
-| 通过标准 | 目录树改名后子孙全在终态；环形改名（A→B、B→A）成功；大小写变化成功；中途注入异常后回滚到原名；视图 retarget 后 `file_name()` 正确 |
+| 通过标准 | 目录树改名后子孙全在终态；环形改名（A→B、B→A）成功；大小写变化成功；中途注入异常后回滚到原名且临时区不残留；视图 retarget 后 `file_name()` 正确 |
+
+**自测覆盖（`_check.py`，全部通过）**：文件批改名、目录+文件混合、环改名、纯大小写改名（`x.txt → X.txt`）、swap 双向改名与内容校验、中途失败回滚、临时区清理、`undo` 恢复原名。连续 5 次运行 `failures 0`。
+
+**已修复的测试侧缺陷**：`case` 用例原先复用 `cyc_root`，与 `swap`/`ring` 用例共享目录导致状态污染——macOS 大小写不敏感卷上残留 `X.txt` 使 `_validate_disk` 的 `_same_file` 放行分支命中，`needs_temp` 偶发保持 `False`。已改为独立 `case_root` 目录并追加 `status == STATUS_OK` 前置断言。
 
 ---
 
@@ -213,11 +221,24 @@
 
 | 项 | 内容 |
 |---|---|
-| 文件 | `mysidebar/batch/rollback.py` |
-| 日志 | `Packages/User/MySideBar/rename_log.json` |
-| 撤销 | 逆序 `os.rename(new, old)`；前置校验 `new` 存在、`old` 不存在；撤销后 retarget |
-| 保留 | 仅最近一次 |
-| 通过标准 | 撤销后全部恢复原名且视图同步；撤销时目标已存在则中止并提示；日志文件不污染项目目录 |
+| 状态 | 已完成 |
+| 文件 | `mysidebar/batch/rollback.py`，另需 `platform.user_dir()`（新增）与 `execute.execute(record_log=)` / `ExecutionResult.log_saved`（新增） |
+| 职责边界 | `execute.rollback()` = 执行期内存态回滚；`rollback.py` = 事后撤销（持久化日志 + 预检）；后者单向依赖 `execute.STEP_TEMP_IN`，不反向依赖 |
+| 函数 | `build_entry`、`log_path`、`save_log`、`load_log`、`clear_log`、`undo_last`；结果对象 `UndoOutcome`（`ok`/`empty`/`blocked`/`partial`） |
+| 日志 | `Packages/User/MySideBar/rename_log.json`（经 `platform.user_dir()`），`{"version", "timestamp", "base", "ops":[{old,new,kind}]}` |
+| ops 口径 | **剔除 `temp_in` 记录**，否则逆序撤销会先把文件 rename 回 uuid 中间名；`ops` 为空时不写日志 |
+| 写入 | 临时文件 + `os.replace` 原子替换，避免半截 JSON |
+| 有效性 | JSON 损坏 / 非 dict / ops 空 / 条目缺 old-new / timestamp 非数值 → `None`；超过 `MAX_AGE_SECONDS`（7 天）→ 过期 `None` |
+| 撤销原子性 | 两阶段：先 preflight 全量校验（`lexists(new)` 真且 `old` 未被占用，`old` 命中时用 `samefile` 兜底大小写不敏感卷），任一不满足 → `blocked` 且**零改动**；再逐条逆序 `os.rename(new, old)` |
+| 日志清理 | 仅 `ok` 时 `clear_log`；`blocked`/`partial` 保留日志以便修复现场后重试 |
+| retarget | 成功后以 `(new, old)` 方向回传，视图恢复原名 |
+| 接口适配 | `execute.moved_pairs()` / `rollback` 的 pairs 是 `[(source,target)]` 列表，而 `ViewResolver.retarget_views()` 收 dict；命令层必须走 `ViewResolver.retarget_pairs(pairs)`，直接传列表会静默失效 |
+| 保留 | 仅最近一次，覆盖写 |
+| 通过标准 | 撤销后全部恢复原名且视图同步；撤销时目标已存在则中止且**磁盘无任何改动**；日志不污染项目目录 |
+
+**自测覆盖（`_check.py` T14 段，连续 3 次 `failures 0`）**：日志条目剔除 `temp_in`、落盘与读回、过期丢弃、撤销恢复原名与内容不变、retarget 方向正确、成功后日志清空、无日志返回 `empty`、旧名被占用返回 `blocked` 且磁盘零改动且日志保留、缺失与损坏日志返回 `None`、空 ops 拒绝写入、`clear_log` 可用。
+
+**健壮性补充口径**：`execute(record_log=False)` 供自测与预览演练使用，避免测试污染真实 User 目录日志；`log_saved` 暴露保存结果，UI 可据此提示「已改名但撤销记录未能写入」。
 
 ---
 

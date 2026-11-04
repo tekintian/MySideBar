@@ -210,6 +210,15 @@ class ViewResolver(object):
                 view.retarget(new_path)
 
     @staticmethod
+    def retarget_pairs(pairs):
+        mapping = {}
+        for source, target in pairs or []:
+            mapping[os.path.normcase(plat.normalize(source))] = target
+        if not mapping:
+            return
+        ViewResolver.retarget_views(mapping)
+
+    @staticmethod
     def close_views_for_paths(paths):
         targets = [os.path.normcase(plat.normalize(p)) for p in (paths or []) if p]
         if not targets:

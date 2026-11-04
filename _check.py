@@ -316,6 +316,79 @@ try:
 finally:
     shutil.rmtree(ex_root)
 
+rb_mod = load_module("mysidebar/batch/rollback.py", "mysidebar.batch.rollback")
+sys.modules["mysidebar.batch.rollback"] = rb_mod
+batch.rollback = rb_mod
+
+rb_root = tempfile.mkdtemp(prefix="mysidebar_t14_")
+try:
+    log_file = os.path.join(rb_root, "rename_log.json")
+    work = os.path.join(rb_root, "work")
+    os.makedirs(work)
+    for name in ("a.txt", "b.txt"):
+        with open(os.path.join(work, name), "w", encoding="utf-8") as fp:
+            fp.write(name)
+
+    uopts = opt(pattern="\\.txt$", replacement=".md", recursive=True)
+    up = _run_plan([work], uopts)
+    plan_mod.validate(up)
+    ures = execute_mod.execute(up, record_log=False)
+    check("undo exec status", ures.status, execute_mod.RESULT_OK)
+    check("undo exec tree", _listdir_rel(work), ["a.md", "b.md"])
+
+    entry = rb_mod.build_entry(ures, up.base, timestamp=1000.0)
+    check("undo entry ops count", len(entry["ops"]), 2)
+    check("undo entry no temp op", any(o["kind"] == execute_mod.STEP_TEMP_IN for o in entry["ops"]), False)
+    check("undo entry old first", entry["ops"][0]["old"], os.path.join(work, "a.txt"))
+    check("undo save", rb_mod.save_log(entry, log_file), True)
+
+    loaded = rb_mod.load_log(log_file, now=1000.0)
+    check("undo load ok", isinstance(loaded, dict), True)
+    check("undo load ops", len(loaded["ops"]) if loaded else 0, 2)
+
+    check("undo stale dropped", rb_mod.load_log(log_file, now=1000.0 + rb_mod.MAX_AGE_SECONDS + 10), None)
+
+    grabbed = []
+    out = rb_mod.undo_last(log_file, retarget=lambda pairs: grabbed.append(pairs), now=1000.0)
+    check("undo outcome status", out.status, rb_mod.UNDO_OK)
+    check("undo outcome count", out.reverted, 2)
+    check("undo tree restored", _listdir_rel(work), ["a.txt", "b.txt"])
+    check("undo content kept", open(os.path.join(work, "a.txt"), encoding="utf-8").read(), "a.txt")
+    check("undo retarget pairs", sorted(grabbed[0]) if grabbed else [], [(os.path.join(work, "a.md"), os.path.join(work, "a.txt")), (os.path.join(work, "b.md"), os.path.join(work, "b.txt"))])
+    check("undo log cleared", rb_mod.load_log(log_file, now=1000.0), None)
+
+    check("undo none", rb_mod.undo_last(log_file, now=1000.0).status, rb_mod.UNDO_EMPTY)
+
+    for name in ("c.txt", "d.txt"):
+        with open(os.path.join(work, name), "w", encoding="utf-8") as fp:
+            fp.write(name)
+    bp = _run_plan([os.path.join(work, "c.txt"), os.path.join(work, "d.txt")], opt(pattern="\\.txt$", replacement=".md"))
+    plan_mod.validate(bp)
+    bres = execute_mod.execute(bp, record_log=False)
+    check("undo block exec", bres.status, execute_mod.RESULT_OK)
+    bentry = rb_mod.build_entry(bres, bp.base, timestamp=2000.0)
+    rb_mod.save_log(bentry, log_file)
+    with open(os.path.join(work, "c.txt"), "w", encoding="utf-8") as fp:
+        fp.write("squatter")
+    before_tree = _listdir_rel(work)
+    bout = rb_mod.undo_last(log_file, now=2000.0)
+    check("undo blocked status", bout.status, rb_mod.UNDO_BLOCKED)
+    check("undo blocked path", bout.blocked_path, os.path.join(work, "c.txt"))
+    check("undo blocked reason", bout.reason_key, "rename.undo_conflict")
+    check("undo blocked untouched", _listdir_rel(work), before_tree)
+    check("undo blocked keeps log", rb_mod.load_log(log_file, now=2000.0) is not None, True)
+
+    check("undo corrupt log", rb_mod.load_log(os.path.join(rb_root, "missing.json"), now=2000.0), None)
+    broken = os.path.join(rb_root, "broken.json")
+    with open(broken, "w", encoding="utf-8") as fp:
+        fp.write("{not json")
+    check("undo broken parsed", rb_mod.load_log(broken, now=2000.0), None)
+
+    check("undo empty entry rejected", rb_mod.save_log({"ops": []}, os.path.join(rb_root, "empty.json")), False)
+    check("undo clear log", rb_mod.clear_log(log_file), True)
+finally:
+    shutil.rmtree(rb_root)
+
 print("failures", len(failures))
 for item in failures:
     print(item)

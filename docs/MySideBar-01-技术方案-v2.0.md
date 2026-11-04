@@ -453,31 +453,106 @@ def validate(plan) -> RenamePlan
 
 ### 5.5 batch/execute.py
 
+**数据结构**：
+
+```python
+@dataclass
+class RenameRecord:
+    source, target, kind      # kind ∈ {"temp_in", "dir", "file", "temp_out"}
+
+@dataclass
+class ExecutionResult:
+    status                    # "ok" | "aborted" | "empty"
+    records: list             # 按执行顺序追加，回滚时逆序消费
+    failure_path, failure_error, failure_reason
+    temp_root                 # 中间名区，结束时置空
+    done()                    # status == "ok"
+    moved_pairs()             # 过滤 kind == "temp_in" 的 (source, target)
+
+def build_steps(plan) -> list      # [(step_kind, PlanItem)]
+def execute(plan, retarget=None) -> ExecutionResult
+def rollback(result) -> int
+def undo(records) -> (reverted, failed_path)
 ```
-Step 0  needs_temp 项 → base/.mysidebar_tmp/{uuid}
-Step 1  目录批（depth 逆序）：os.rename(dirname(cur)+old_leaf, dirname(cur)+new_leaf)
-Step 2  文件批：parent_final = final_parent_of(old_abs)；rename(parent_final+old_leaf, parent_final+new_leaf)
-Step 3  中间名项落地终态
-Step 4  按映射表 M 一次性 retarget 全部视图
-Step 5  写回滚日志
+
+**步骤顺序（`build_steps` 产出，不可调整）**：
+
+```
+阶段 A  temp_in   全部 needs_temp 项 → base/.mysidebar_tmp/{uuid}
+阶段 B  dir       非 needs_temp 目录项，按 depth 逆序
+阶段 C  file      非 needs_temp 文件项
+阶段 D  temp_out  needs_temp 项从中间名落到终态
 ```
 
 **正确性论证**：
 
-- 目录批逆序 → 子目录先改名，父目录改名时整树搬移，子项自动到终态
+- `needs_temp` 集合包含两类：改名链回环项、纯大小写变化项。它们先整体沉入中间名区，使「旧名已腾空」，后续落终态时才不会撞上自身旧路径
+- 目录批按 `depth` 逆序 → 子目录先改名，父目录改名时整树搬移，子项自动到终态
 - 文件批在目录批之后 → 所有目录已终态，source 必有效、target 必终态
-- 仅一次映射表 M，执行期无前缀 remap，从机制上消除同名重复修改
+- `temp_out` 置于最后 → 中间名项的目标名此时才被腾空，避免与普通项争抢
+- 目标落点用 `dir_final[rel_old] = 最终绝对路径` 查表：以**相对路径为键**，子项父目录改名后自动跟随，无需从绝对路径反推祖先
 
-**失败处理**：任一步失败 → 停止 → 逆序回滚 → 上报。
+**字段命名一致性**：`PlanItem.rel_old` 与 `RenameRecord.source/target` 均为**绝对路径**，`rel_*` 只用于建键与展示，执行层不做路径拼接以外的推断。
+
+**失败处理（原子性）**：
+
+- `_rename` 前置校验源存在、父目录存在；父目录缺失**直接抛 `OSError`**，禁止 `makedirs` 兜底（那会掩盖 plan 缺陷）
+- 任一 `OSError` → `status = aborted` → `rollback(result)` 逆序 rename 回原名 → `_cleanup_temp` → 返回
+- `rollback` 逐条逆序回退，跳过「target 已不存在」或「source 已被占用」的条目，容忍部分失败但不中断
+- `_cleanup_temp` 递归删除 uuid 目录，空父目录一并移除，不泄漏临时区
+
+**视图重定向**：`moved_pairs()` 过滤掉 `temp_in` 记录，只暴露「原始路径 → 终态路径」，中间名永不进入 retarget 输入。
 
 **规模策略**：上限 `batch_rename_max_items`（默认 5000），**同步执行**；超 2000 项时确认框提示预估耗时。不做异步，避免视图 retarget 时序竞态。
 
 ### 5.6 batch/rollback.py
 
-- 日志：`Packages/User/MySideBar/rename_log.json`
-- 结构：`{"timestamp":..., "base":..., "ops":[{"old":..., "new":..., "kind":...}]}`
-- 撤销：逆序 `os.rename(new, old)`，前置校验 `new` 存在、`old` 不存在；撤销后 retarget
-- 只保留最近一次
+**职责边界**：`execute.rollback()` 是**执行期内部回滚**（内存态，只消费本次 `ExecutionResult.records`）；`rollback.py` 是**事后撤销**（持久化日志 + 预检 + 跨进程可用）。两者不互相替代，`rollback.py` 单向依赖 `execute` 的 `STEP_TEMP_IN` 常量。
+
+**数据结构**：
+
+```python
+class UndoOutcome:
+    status            # "ok" | "empty" | "blocked" | "partial"
+    reverted: int
+    blocked_path: str
+    reason_key: str
+    reason_param: str
+    pairs: [...]
+    done()            # status == "ok"
+
+def build_entry(result, base, timestamp=None) -> dict
+def log_dir() / log_path() -> str
+def save_log(entry, path=None) -> bool
+def load_log(path=None, now=None) -> dict | None
+def clear_log(path=None) -> bool
+def undo_last(path=None, retarget=None, now=None) -> UndoOutcome
+```
+
+**日志位置与结构**：
+
+- 路径：`Packages/User/MySideBar/rename_log.json`，经 `platform.user_dir()` 取得，**不落在项目目录**
+- 结构：`{"version": 1, "timestamp": float, "base": str, "ops": [{"old": abs, "new": abs, "kind": ...}]}`
+- **`ops` 只记录非 `temp_in` 的 records**：中间名是执行期产物，撤销时若参与逆序会出现「先 rename 回 uuid 名」的错乱
+- `ops` 为空时 `save_log` 直接返回 `False`，不允许空条目占据「最近一次」槽位
+- 写入用 `临时文件 + os.replace` 原子替换，避免中途崩溃留下半截 JSON
+
+**有效性判定（`load_log`）**：
+
+- JSON 解析失败、非 dict、`ops` 非列表或为空、任一条目缺 `old`/`new`、`timestamp` 非数值 → 返回 `None`
+- 超过 `MAX_AGE_SECONDS`（7 天）→ 视为过期返回 `None`，避免撤销跨越太久、现场已面目全非的批次
+
+**撤销原子性（两阶段）**：
+
+1. **preflight 预检（一个文件都不动）**：逆序遍历 `ops`，要求 `lexists(new)` 为真且 `old` 未被占用。`old` 存在时用 `samefile` 兜底——macOS 大小写不敏感卷上 `lexists(old)` 可能恒真，`_same_entry` 命中才放行。任一不满足 → 返回 `blocked`，携带冲突路径与 `rename.undo_conflict` 文案键
+2. **execute 执行**：逐条逆序 `os.rename(new, old)`；中途 `OSError` → `partial`，保留已回退计数与失败路径
+
+- 成功才 `clear_log`；`blocked` / `partial` 一律**保留日志**，用户修复现场后可重试
+- 成功后对 `pairs`（`new → old` 方向）调用 `retarget`，视图随之回到原名
+
+**跨层接口适配（必须遵守）**：`execute.moved_pairs()` 与 `rollback` 的 `pairs` 都是 **`[(source, target)]` 列表**，而 `api.ViewResolver.retarget_views()` 接收 **dict（键为 `normcase(normalize(path))`）**。命令层**禁止**直接 `retarget_views(pairs)`（`dict.get` 会失败且静默无效），必须经 `ViewResolver.retarget_pairs(pairs)` 归一化转换。
+
+**保留策略**：只保留最近一次，`save_log` 直接覆盖。
 
 ### 5.7 cmds/encoding.py（批量编码转换）
 

@@ -1,2 +1,3 @@
-failures 1
-case variant needs_temp: got False expected True
+COMPILE_EXIT=0
+failures 0
+CHECK_EXIT=0

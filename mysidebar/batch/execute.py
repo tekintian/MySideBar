@@ -31,6 +31,7 @@ class ExecutionResult:
     failure_error: str = ""
     failure_reason: str = ""
     temp_root: str = ""
+    log_saved: bool = False
 
     def done(self):
         return self.status == RESULT_OK
@@ -59,7 +60,7 @@ def build_steps(plan):
     return steps
 
 
-def execute(plan, retarget=None):
+def execute(plan, retarget=None, record_log=True):
     result = ExecutionResult()
     steps = build_steps(plan)
     if not steps:
@@ -100,9 +101,16 @@ def execute(plan, retarget=None):
         return result
     _cleanup_temp(result.temp_root)
     result.temp_root = ""
+    result.log_saved = _save_log(plan.base, result) if record_log else False
     if retarget is not None:
         retarget(result.moved_pairs())
     return result
+
+
+def _save_log(base, result):
+    from . import rollback as rb
+    entry = rb.build_entry(result, base)
+    return rb.save_log(entry)
 
 
 def rollback(result):

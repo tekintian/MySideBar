@@ -94,6 +94,10 @@ def same_path(a, b):
     return os.path.normcase(normalize(a)) == os.path.normcase(normalize(b))
 
 
+def user_dir():
+    return os.path.join(sublime.packages_path(), "User")
+
+
 def is_symlink(path):
     return os.path.islink(path)
 
