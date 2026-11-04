@@ -554,7 +554,62 @@ def undo_last(path=None, retarget=None, now=None) -> UndoOutcome
 
 **保留策略**：只保留最近一次，`save_log` 直接覆盖。
 
-### 5.7 cmds/encoding.py（批量编码转换）
+### 5.7 batch_rename 输入链、预览与执行入口（T15）
+
+**输入形态的事实依据（已实测，不可回退）**：
+
+- ST 4215 的 `show_panel` 只接受 **7 个硬编码面板名**：`console_panel` / `find_in_files_panel` / `find_panel` / `input_panel` / `output_panel` / `replace_panel` / `switch_project_panel`
+- 二进制中**不存在** `SideBarInputHandler`、`sublime-panel` 或任何自定义面板注册机制 → **无法借原生查找面板的外观承载自定义表单**
+- `sublime_plugin.CommandInputHandler` 只服务于**命令面板单行输入**，无法生成 Find/Where/Replace 三行并排布局
+- 结论：采用 **预设列表 + 分段 `show_input_panel`**，不追求三行并排
+
+**交互链（3 步）**：
+
+1. `show_quick_panel` 选**预设**（7 项：正则/编号 × 仅文件名/含子目录/仅目录/相对路径）
+2. 正则模式 → `show_input_panel` 输入 pattern（回填上次值）
+3. 正则模式 → `show_input_panel` 输入 replacement（回填上次值）
+4. 编号模式跳过 2/3，直接构建 plan
+5. 打开预览视图 → 视图内执行全部 / 仅执行选中 / 撤销
+
+**预设 → RenameOptions 映射**（`PRESETS` 元组，顺序即面板顺序）：
+
+| 预设键 | mode | scope | recursive | include_dirs |
+|---|---|---|---|---|
+| `rename.preset_regex_files` | regex | name | False | False |
+| `rename.preset_regex_files_all` | regex | name | True | False |
+| `rename.preset_regex_path` | regex | path | True | False |
+| `rename.preset_regex_dirs` | regex | name | True | True |
+| `rename.preset_sequence_files` | sequence | name | False | False |
+| `rename.preset_sequence_files_all` | sequence | name | True | False |
+| `rename.preset_sequence_dirs` | sequence | name | True | True |
+
+- 预设一次表达 mode/scope/recursive/include_dirs 四个维度，**解决了 `ListInputHandler` 一次只能返回一个值、无法表达多布尔开关的问题**
+- 上次输入记忆存 `MySideBar.sublime-settings` 的 `mysidebar_rename_last_pattern` / `mysidebar_rename_last_replacement`
+
+**分层职责**：
+
+- `mysidebar/ui/preview_model.py`：**纯逻辑，不 import sublime**。`line_for` / `lines_for` / `summary_text` / `selected_indexes` / `subset_plan`，可离线单测
+- `mysidebar/ui/preview.py`：ST 视图层。复用已有预览 view（`PREVIEW_FLAG` 标记），`set_read_only(True)`，plan 存于 `view.settings()[PLAN_SESSION]`
+- `mysidebar/cmds/batch_rename.py`：命令层，负责 i18n 与用户交互；UI 层只接收已翻译字符串
+
+**预览文本与行号映射（必须保持一致）**：
+
+- 布局：第 0 行 = 汇总，第 1 行 = 空行，第 2 行起 = 逐项数据
+- `HEADER_BLANK_LINES = 1` 同时驱动 `render()` 的分隔符与 `header_lines()` 的偏移，**禁止两处独立硬编码**，否则选区行号会整体错位
+- `selected_indexes(view)` 由选区行号反查 `plan.items` 索引，**只保留 `status == ok`** 的项；冲突项必须由用户修正模式后重跑，不能被“选中执行”绕过
+
+**执行与撤销入口**：
+
+- 执行前 `show_ok_cancel_dialog` 二次确认
+- 执行调用 `execute.execute(plan, retarget=ViewResolver.retarget_pairs)`；撤销调用 `rollback.undo_last(retarget=ViewResolver.retarget_pairs)`
+- **禁止**传裸 `pairs` 给 `retarget_views`（见 5.6 接口适配约束）
+
+**`is_enabled` 性能约束**：
+
+- `MySidebarRenameUndoCommand.is_enabled()` 会被 ST 高频调用（菜单弹出、命令面板过滤），**禁止在其中读盘**
+- 改为内存缓存 `_undo_cache`，插件加载后由 `mysidebar.on_plugin_loaded()` → `_refresh_rename_undo()` 预热，`run()` 时刷新
+
+### 5.8 cmds/encoding.py（批量编码转换）
 
 **范围**：仅批量转换。单文件场景由原生 `Chinese (GB18030)` / UTF-8 覆盖，**不实现**。
 
@@ -613,7 +668,7 @@ def undo_last(path=None, retarget=None, now=None) -> UndoOutcome
 3. 汇总到 `window.create_output_panel`：成功 / 跳过 / 失败 + 原因
 4. 单文件超 `encoding_max_bytes`（默认 20 MB）拒绝，提示改用命令行工具
 
-### 5.8 cmds/search.py（搜索结果批量操作视图）
+### 5.9 cmds/search.py（搜索结果批量操作视图）
 
 **定位**：不做第二个 Goto Anything。原生 `super+p` 已提供递归列表 + 模糊匹配 + `文件:行:列` 语法。
 
@@ -625,7 +680,7 @@ def undo_last(path=None, retarget=None, now=None) -> UndoOutcome
 4. 遍历在 `set_timeout_async` 中执行，结果分批 insert，避免阻塞 UI
 5. 上限 `search_result_limit`（默认 5000）
 
-### 5.9 cmds/shadow.py（菜单遮蔽，默认开启）
+### 5.10 cmds/shadow.py（菜单遮蔽，默认开启）
 **`menu_shadow_default_items` 默认 `true`**。
 
 理由：`delete_file`、`delete_folder`、`new_file_at` 被判定为 **D 类（原生有但体验差，自研替换）**。D 类的定义要求替换必须真正发生；若默认不遮蔽，原生永久删除与单选新建仍暴露在菜单中，与自研项并存，D 类判定形同虚设。此外原生删除为无确认永久删除，默认遮蔽可直接避免用户误用。
@@ -655,7 +710,7 @@ refresh_folder_list        paste 相关
 - 遮蔽依据是命令名，与菜单语言无关
 - 空壳 `is_visible()` / `is_enabled()` 返回严格 `False`
 
-### 5.10 clipboard.py 与 cmds/clipboard.py（第 4 项）
+### 5.11 clipboard.py 与 cmds/clipboard.py（第 4 项）
 
 **分层**：`mysidebar/clipboard.py` 只维护「本次 ST 会话内」的剪贴板状态，不 import `sublime_plugin`，便于单测；`mysidebar/cmds/clipboard.py` 只做参数解析、文件操作与提示。
 

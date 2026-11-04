@@ -242,15 +242,22 @@
 
 ---
 
-### T15 批量改名命令层与预览 UI
+### T15 批量改名命令层与预览 UI（已完成）
 
 | 项 | 内容 |
 |---|---|
-| 文件 | `mysidebar/cmds/batch_rename.py`、`mysidebar/ui/preview.py`、`mysidebar/ui/input.py`，包根 `MySideBar Rename Preview.sublime-syntax` |
-| 输入链 | `TextInputHandler`（正则）→ `TextInputHandler`（替换）→ `ListInputHandler`（选项）；**不用 `show_input_panel`**；回退用 `sublime_plugin.BackInputHandler()` |
-| 预览 | 渲染 scratch 视图，每行 `旧路径 → 新路径 [状态]`；语法高亮区分 ok/skipped/invalid/conflict |
-| 执行 | 支持「全部执行」与「仅执行选中行」（`whole=False`） |
-| 通过标准 | 非法正则留在当前步不前进；预览视图状态着色正确；仅执行选中行时其余项不变 |
+| 文件 | `mysidebar/cmds/batch_rename.py`、`mysidebar/ui/preview.py`、`mysidebar/ui/preview_model.py`，包根 `MySideBar Rename Preview.sublime-syntax` |
+| **输入链变更（实测否定原计划）** | 原计划「`InputHandler` 链、不用 `show_input_panel`」**不可实现**：ST 4215 仅 7 个硬编码面板名、二进制无 `SideBarInputHandler`/`sublime-panel` 注册机制，`CommandInputHandler` 只服务命令面板单行输入，无法产出三行并排表单。改为 **`show_quick_panel` 预设（7 项）+ 分段 `show_input_panel`（带上次值回填）**，交互 3 步封顶 |
+| 预设维度 | 一次选择同时确定 mode（regex/sequence）、scope（name/path）、recursive、include_dirs 四维，规避 `ListInputHandler` 单值返回的局限 |
+| 预览 | 复用预览视图（`PREVIEW_FLAG` 标记）；首行汇总 + 空行 + 逐项 `旧路径 -> 新路径 [状态] 原因`；`sublime-syntax` 按行尾 `[ok]/[skipped]/[conflict]/[invalid]` 着色 |
+| 行号映射 | `HEADER_BLANK_LINES` 单一常量同时驱动渲染分隔符与选区偏移，禁止两处硬编码 |
+| 执行 | 「全部执行」与「仅执行选中行」；选中项**只取 `status == ok`**，冲突项必须修正模式后重跑 |
+| 撤销 | 命令层接 `rollback.undo_last`，`is_enabled` 用内存缓存 `_undo_cache`，由 `on_plugin_loaded` 预热，**禁止在 `is_enabled` 中读盘** |
+| 通过标准 | 非法正则留在当前步不前进（`plan.error` 直接提示，不进入预览）；预览状态着色正确；仅执行选中行时其余项不变 |
+
+**自测覆盖（`_check.py` T15 段，`failures 0`）**：行数构造、`[ok]` 行尾标记、未变更项落 `skipped`、冲突场景出现 `conflict`/`skipped`、汇总文案各字段、选中全量/空/单行、`subset_plan` 保持 base 与 `skipped_symlinks`、原因文案后缀与 `->` 形状。
+
+**遗留说明**：`ui/preview.py` 依赖 `sublime` 与 `assign_syntax`，属 ST 运行时行为，仅能在 ST 内验证，离线自测只覆盖 `preview_model.py`。语法文件在包根（质量门禁 7）。
 
 ---
 

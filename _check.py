@@ -389,6 +389,65 @@ try:
 finally:
     shutil.rmtree(rb_root)
 
+ui_pkg = types.ModuleType("mysidebar.ui")
+ui_pkg.__path__ = [os.path.abspath("mysidebar/ui")]
+sys.modules["mysidebar.ui"] = ui_pkg
+pkg.ui = ui_pkg
+
+pv_mod = load_module("mysidebar/ui/preview_model.py", "mysidebar.ui.preview_model")
+sys.modules["mysidebar.ui.preview_model"] = pv_mod
+ui_pkg.preview_model = pv_mod
+
+pv_root = tempfile.mkdtemp(prefix="mysidebar_t15_")
+try:
+    work = os.path.join(pv_root, "work")
+    os.makedirs(work)
+    for name in ("a.txt", "b.txt", "c.log"):
+        with open(os.path.join(work, name), "w", encoding="utf-8") as fp:
+            fp.write(name)
+
+    pp = _run_plan([work], opt(pattern="^a\\.txt$", replacement="a.txt"))
+    plan_mod.validate(pp)
+    check("preview unchanged status", _pick(failures, "pv-unchanged", pp, "a.txt").status, plan_mod.STATUS_SKIPPED)
+
+    qp = _run_plan([work], opt(pattern="\\.txt$", replacement=".log"))
+    plan_mod.validate(qp)
+    rows = pv_mod.lines_for(qp, i18n_stub.t)
+    check("preview row count", len(rows), 3)
+    check("preview row ok label", rows[0].endswith("[ok]"), True)
+    check("preview all ok", [i.status for i in qp.items], [plan_mod.STATUS_OK, plan_mod.STATUS_OK, plan_mod.STATUS_SKIPPED])
+
+    clashing = _run_plan([work], opt(pattern="^\\.(txt|log)$", replacement=".same"))
+    plan_mod.validate(clashing)
+    cstatus = [i.status for i in clashing.items]
+    check("preview clash has dup", plan_mod.STATUS_CONFLICT in cstatus or plan_mod.STATUS_SKIPPED in cstatus, True)
+    check("preview clash skipped summary", pv_mod.summary_text(clashing, "total={total}").startswith("total=3"), True)
+
+    summ = pv_mod.summary_text(qp, "total={total} ok={ok} skipped={skipped} conflict={conflict} invalid={invalid}")
+    counts = qp.counts()
+    check("preview summary total", "total=%d" % len(qp.items), summ.split()[0])
+    check("preview summary skipped", "skipped=%d" % counts.get(plan_mod.STATUS_SKIPPED, 0), summ.split()[2])
+
+    pick_all = pv_mod.selected_indexes(qp, [0, 1, 2])
+    check("preview select all actionable", len(pick_all), len(qp.actionable()))
+    pick_none = pv_mod.selected_indexes(qp, [])
+    check("preview select none", pick_none, [])
+    pick_one = pv_mod.selected_indexes(qp, [0])
+    check("preview select single", len(pick_one), 1 if qp.items[0].status == plan_mod.STATUS_OK else 0)
+
+    sub = pv_mod.subset_plan(qp, pick_all)
+    check("preview subset base", sub.base, qp.base)
+    check("preview subset items", len(sub.items), len(pick_all))
+    check("preview subset symlinks", sub.skipped_symlinks, qp.skipped_symlinks)
+
+    fixed = _run_plan([work], opt(pattern="^a\.txt$", replacement="z_a.txt"))
+    plan_mod.validate(fixed)
+    frow = pv_mod.line_for(_pick(failures, "pv-fixed", fixed, "a.txt"), "rename.reason.unchanged")
+    check("preview reason suffix", frow.endswith("rename.reason.unchanged"), True)
+    check("preview arrow shape", " -> " in frow, True)
+finally:
+    shutil.rmtree(pv_root)
+
 print("failures", len(failures))
 for item in failures:
     print(item)

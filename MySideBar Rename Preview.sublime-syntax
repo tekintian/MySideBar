@@ -1,0 +1,18 @@
+%YAML 1.2
+---
+name: MySideBar Rename Preview
+scope: source.mysidebar-rename-preview
+hidden: true
+
+contexts:
+  main:
+    - match: '^\s*\S.*\s\[ok\]$'
+      scope: mysidebar.rename.ok
+    - match: '^\s*\S.*\s\[skipped\]$'
+      scope: mysidebar.rename.skipped
+    - match: '^\s*\S.*\s\[conflict\]$'
+      scope: mysidebar.rename.conflict
+    - match: '^\s*\S.*\s\[invalid\]$'
+      scope: mysidebar.rename.invalid
+    - match: '^\s*\S.*\s\[.*\]\s.*$'
+      scope: mysidebar.rename.reason

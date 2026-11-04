@@ -8,6 +8,7 @@ from . import i18n
 
 def on_plugin_loaded():
     _load_commands()
+    _refresh_rename_undo()
     settings = sublime.load_settings("MySideBar.sublime-settings")
     language = settings.get("ui_language")
     if language not in i18n.languages():
@@ -34,6 +35,11 @@ def _load_commands():
         if info.ispkg:
             continue
         importlib.import_module("%s.cmds.%s" % (__name__, info.name))
+
+
+def _refresh_rename_undo():
+    from .cmds import batch_rename
+    batch_rename.refresh_undo_cache()
 
 
 def _prompt_language(window):
