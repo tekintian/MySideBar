@@ -1,0 +1,6 @@
+[
+	{ "caption": "-" },
+	{ "caption": "Reveal In File Manager", "command": "my_sidebar_tab_reveal", "args": {"group": -1, "index": -1} },
+	{ "caption": "Copy Relative Path", "command": "my_sidebar_tab_copy_relative_path", "args": {"group": -1, "index": -1} },
+	{ "caption": "Open Containing Folder", "command": "my_sidebar_tab_open_dir", "args": {"group": -1, "index": -1} }
+]

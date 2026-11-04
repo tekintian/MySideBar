@@ -1,0 +1,2 @@
+failures 1
+case variant needs_temp: got False expected True
