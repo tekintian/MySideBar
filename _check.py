@@ -62,7 +62,22 @@ def _pick(log, label, plan, wanted):
         if item.rel_old == wanted:
             return item
     log.append("%s: missing %s in %r" % (label, wanted, [i.rel_old for i in plan.items]))
-    return plan_mod.PlanItem("", "", "", "", "")
+    return None
+
+
+class _Fallback(object):
+    rel_old = ""
+    rel_new = ""
+    status = "missing"
+    reason = "missing"
+    needs_temp = None
+    new_abs = ""
+
+
+def _attr(item, name):
+    if item is None:
+        return getattr(_Fallback, name)
+    return getattr(item, name)
 
 
 root = tempfile.mkdtemp(prefix="mysidebar_t12_")
@@ -92,8 +107,8 @@ try:
     plan_mod.compute(esc, opt(pattern="one", replacement="../escape", recursive=True))
     plan_mod.validate(esc)
     hit = _pick(failures, "esc", esc, "a/one.txt")
-    check("escape invalid", hit.status, plan_mod.STATUS_INVALID)
-    check("escape reason", hit.reason, "rename.reason.escape")
+    check("escape invalid", _attr(hit, "status"), plan_mod.STATUS_INVALID)
+    check("escape reason", _attr(hit, "reason"), "rename.reason.escape")
 
     dup = plan_mod.collect([root], opt(pattern=r"(one|two)", replacement="same", recursive=True))
     plan_mod.compute(dup, opt(pattern=r"(one|two)", replacement="same", recursive=True))
@@ -110,14 +125,14 @@ try:
     plan_mod.compute(disk, opt(pattern="one", replacement="taken", recursive=True))
     plan_mod.validate(disk)
     hit2 = _pick(failures, "disk", disk, "a/one.txt")
-    check("disk exists conflict", hit2.status, plan_mod.STATUS_CONFLICT)
-    check("disk exists reason", hit2.reason, "rename.reason.exists_on_disk")
+    check("disk exists conflict", _attr(hit2, "status"), plan_mod.STATUS_CONFLICT)
+    check("disk exists reason", _attr(hit2, "reason"), "rename.reason.exists_on_disk")
 
     skip = plan_mod.collect([root], opt(pattern="zzz", replacement="q", recursive=True))
     plan_mod.compute(skip, opt(pattern="zzz", replacement="q", recursive=True))
     plan_mod.validate(skip)
     hit3 = _pick(failures, "skip", skip, "keep.txt")
-    check("unchanged skipped", hit3.status, plan_mod.STATUS_SKIPPED)
+    check("unchanged skipped", _attr(hit3, "status"), plan_mod.STATUS_SKIPPED)
 
     cyc_root = tempfile.mkdtemp(prefix="mysidebar_cyc_")
     try:
@@ -128,23 +143,31 @@ try:
         plan_mod.compute(swap, opt(pattern="^x\.txt$", replacement="y.txt"))
         plan_mod.validate(swap)
         sitem = _pick(failures, "swap", swap, "x.txt")
-        check("swap one-way conflict", sitem.status, plan_mod.STATUS_CONFLICT)
-        check("swap one-way reason", sitem.reason, "rename.reason.exists_on_disk")
+        check("swap one-way conflict", _attr(sitem, "status"), plan_mod.STATUS_CONFLICT)
+        check("swap one-way reason", _attr(sitem, "reason"), "rename.reason.exists_on_disk")
 
         ring = plan_mod.collect([cyc_root], opt(pattern="x|y", replacement="__"))
         plan_mod.compute(ring, opt(pattern="x|y", replacement="__"))
         plan_mod.validate(ring)
         for name in ("x.txt", "y.txt"):
             ritem = _pick(failures, "ring %s" % name, ring, name)
-            check("ring duplicate conflict %s" % name, ritem.status, plan_mod.STATUS_CONFLICT)
+            check("ring duplicate conflict %s" % name, _attr(ritem, "status"), plan_mod.STATUS_CONFLICT)
 
-        ci = plan_mod.collect([cyc_root], opt(pattern="^x\.txt$", replacement="X.txt"))
-        plan_mod.compute(ci, opt(pattern="^x\.txt$", replacement="X.txt"))
-        plan_mod.validate(ci)
-        citem = _pick(failures, "case", ci, "x.txt")
-        check("case variant needs_temp", citem.needs_temp, True)
     finally:
         shutil.rmtree(cyc_root)
+
+    case_root = tempfile.mkdtemp(prefix="mysidebar_case_")
+    try:
+        with open(os.path.join(case_root, "x.txt"), "w", encoding="utf-8") as fp:
+            fp.write("x")
+        ci = plan_mod.collect([case_root], opt(pattern="x\.txt", replacement="X.txt"))
+        plan_mod.compute(ci, opt(pattern="x\.txt", replacement="X.txt"))
+        plan_mod.validate(ci)
+        citem = _pick(failures, "case", ci, "x.txt")
+        check("case variant status", _attr(citem, "status"), plan_mod.STATUS_OK)
+        check("case variant needs_temp", _attr(citem, "needs_temp"), True)
+    finally:
+        shutil.rmtree(case_root)
 
     sym_root = tempfile.mkdtemp(prefix="mysidebar_sym_")
     try:
@@ -167,6 +190,131 @@ try:
     check("sequence unique", len(set(names)), len(names))
 finally:
     shutil.rmtree(root)
+
+execute_mod = load_module("mysidebar/batch/execute.py", "mysidebar.batch.execute")
+sys.modules["mysidebar.batch.execute"] = execute_mod
+batch.execute = execute_mod
+
+
+def _run_plan(targets, opts):
+    p = plan_mod.collect(targets, opts)
+    plan_mod.compute(p, opts)
+    plan_mod.validate(p)
+    return p
+
+
+def _listdir_rel(base):
+    found = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        for name in dirnames + filenames:
+            full = os.path.join(dirpath, name)
+            found.append(os.path.relpath(full, base).replace(os.sep, "/"))
+    return sorted(found)
+
+
+ex_root = tempfile.mkdtemp(prefix="mysidebar_t13_")
+try:
+    os.makedirs(os.path.join(ex_root, "sub"))
+    for rel in ("a.txt", "b.txt", "sub/c.txt"):
+        with open(os.path.join(ex_root, rel), "w", encoding="utf-8") as fp:
+            fp.write("x")
+
+    mixed = _run_plan([ex_root], opt(pattern="^(a|b)", replacement="z_$1", recursive=True))
+    plan_mod.validate(mixed)
+    steps = execute_mod.build_steps(mixed)
+    kinds = [k for k, _ in steps]
+    check("steps files only", kinds, [execute_mod.STEP_FILE, execute_mod.STEP_FILE])
+    captured = {}
+    res = execute_mod.execute(mixed, lambda pairs: captured.setdefault("pairs", pairs))
+    check("execute status", res.status, execute_mod.RESULT_OK)
+    check("execute records", len(res.records), 2)
+    check("execute moved pairs", len(captured.get("pairs", [])), 2)
+    check("execute tree", _listdir_rel(ex_root), ["sub", "sub/c.txt", "z_a.txt", "z_b.txt"])
+    zpath = os.path.join(ex_root, "z_a.txt")
+    check("execute contents kept", open(zpath, encoding="utf-8").read() if os.path.exists(zpath) else "missing", "x")
+    check("execute temp cleaned", os.path.isdir(os.path.join(ex_root, plan_mod.TEMP_DIR_NAME)), False)
+
+    back, failed = execute_mod.undo(res.records)
+    check("undo reverted", back, 2)
+    check("undo no failure", failed, "")
+    check("undo tree", _listdir_rel(ex_root), ["a.txt", "b.txt", "sub", "sub/c.txt"])
+
+    dirp = _run_plan([ex_root], opt(pattern="^sub$", replacement="s2", recursive=True, include_dirs=True))
+    plan_mod.validate(dirp)
+    steps2 = execute_mod.build_steps(dirp)
+    check("dir before file", [k for k, _ in steps2][0], execute_mod.STEP_DIR)
+    res2 = execute_mod.execute(dirp)
+    check("dir execute status", res2.status, execute_mod.RESULT_OK)
+    check("dir execute tree", _listdir_rel(ex_root), ["a.txt", "b.txt", "s2", "s2/c.txt"])
+
+    ring2 = _run_plan([os.path.join(ex_root, "a.txt"), os.path.join(ex_root, "b.txt")], opt(pattern="", replacement=""))
+    plan_mod.validate(ring2)
+    check("ring plan actionable empty", len(ring2.actionable()), 0)
+
+    swap_root = tempfile.mkdtemp(prefix="mysidebar_t13swap_")
+    try:
+        for name in ("x.txt", "y.txt"):
+            with open(os.path.join(swap_root, name), "w", encoding="utf-8") as fp:
+                fp.write(name)
+        ringopts = opt(mode=options.MODE_REGEX, pattern="^(x|y)\\.txt$", replacement="$1_swapped.txt", recursive=True)
+        rp = _run_plan([swap_root], ringopts)
+        plan_mod.validate(rp)
+        check("swap plan ok", len(rp.actionable()), 2)
+        rres = execute_mod.execute(rp)
+        check("swap execute status", rres.status, execute_mod.RESULT_OK)
+        check("swap tree", _listdir_rel(swap_root), ["x_swapped.txt", "y_swapped.txt"])
+        xpath = os.path.join(swap_root, "x_swapped.txt")
+        check("swap x content", open(xpath, encoding="utf-8").read() if os.path.exists(xpath) else "missing", "x.txt")
+    finally:
+        shutil.rmtree(swap_root)
+
+    case_root = tempfile.mkdtemp(prefix="mysidebar_t13case_")
+    try:
+        with open(os.path.join(case_root, "readme.md"), "w", encoding="utf-8") as fp:
+            fp.write("body")
+        copts = opt(pattern="^readme\\.md$", replacement="README.md", recursive=True)
+        cp = _run_plan([case_root], copts)
+        plan_mod.validate(cp)
+        check("case needs temp", cp.actionable()[0].needs_temp, True)
+        cres = execute_mod.execute(cp)
+        check("case execute status", cres.status, execute_mod.RESULT_OK)
+        check("case tree", _listdir_rel(case_root), ["README.md"])
+        upath = os.path.join(case_root, "README.md")
+        check("case content", open(upath, encoding="utf-8").read() if os.path.exists(upath) else "missing", "body")
+        check("case temp cleaned", os.path.isdir(os.path.join(case_root, plan_mod.TEMP_DIR_NAME)), False)
+    finally:
+        shutil.rmtree(case_root)
+
+    fail_root = tempfile.mkdtemp(prefix="mysidebar_t13fail_")
+    try:
+        for name in ("m1.txt", "m2.txt"):
+            with open(os.path.join(fail_root, name), "w", encoding="utf-8") as fp:
+                fp.write(name)
+        fopts = opt(pattern="m", replacement="n", recursive=True)
+        fp_plan = _run_plan([fail_root], fopts)
+        plan_mod.validate(fp_plan)
+        orig_rename = os.rename
+        state = {"calls": 0}
+
+        def fake_rename(src, dst):
+            state["calls"] += 1
+            if state["calls"] == 2:
+                raise OSError(13, "denied")
+            return orig_rename(src, dst)
+
+        os.rename = fake_rename
+        try:
+            fres = execute_mod.execute(fp_plan)
+        finally:
+            os.rename = orig_rename
+        check("fail aborted", fres.status, execute_mod.RESULT_ABORTED)
+        check("fail reason", fres.failure_reason, "rename.error.rename_failed")
+        check("fail rolled back tree", _listdir_rel(fail_root), ["m1.txt", "m2.txt"])
+        check("fail temp cleaned", os.path.isdir(os.path.join(fail_root, plan_mod.TEMP_DIR_NAME)), False)
+    finally:
+        shutil.rmtree(fail_root)
+finally:
+    shutil.rmtree(ex_root)
 
 print("failures", len(failures))
 for item in failures:
