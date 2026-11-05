@@ -236,15 +236,6 @@ class MySidebarSearchTrashCommand(MySidebarSearchBase):
         self.window.run_command("my_sidebar_move_to_trash", {"paths": paths})
 
 
-class MySidebarSearchRenameCommand(MySidebarSearchBase):
-    def run(self):
-        paths = self._paths()
-        if not paths:
-            _status(self.window, "search.no_selection")
-            return
-        self.window.run_command("my_sidebar_rename", {"paths": paths})
-
-
 class MySidebarSearchCopyCommand(MySidebarSearchBase):
     def run(self):
         paths = self._paths()

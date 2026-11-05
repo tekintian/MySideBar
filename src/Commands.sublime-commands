@@ -1,13 +1,8 @@
 [
 	{ "caption": "MySideBar: List Files", "command": "my_sidebar_search_files" },
 	{ "caption": "MySideBar: Move Listed To Trash", "command": "my_sidebar_search_trash" },
-	{ "caption": "MySideBar: Rename Listed", "command": "my_sidebar_search_rename" },
 	{ "caption": "MySideBar: Copy Listed Paths", "command": "my_sidebar_search_copy" },
 	{ "caption": "-" },
-	{ "caption": "MySideBar: Batch Rename", "command": "my_sidebar_batch_rename" },
-	{ "caption": "MySideBar: Execute All Batch Rename", "command": "my_sidebar_rename_execute_all" },
-	{ "caption": "MySideBar: Execute Selected Batch Rename", "command": "my_sidebar_rename_execute_selected" },
-	{ "caption": "MySideBar: Undo Last Batch Rename", "command": "my_sidebar_rename_undo" },
 	{ "caption": "MySideBar: Convert Encoding", "command": "my_sidebar_convert_encoding" },
 	{ "caption": "-" },
 	{ "caption": "MySideBar: UI Language - English", "command": "my_sidebar_set_language", "args": {"language": "en"} },

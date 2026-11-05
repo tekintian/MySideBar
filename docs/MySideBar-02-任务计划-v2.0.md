@@ -14,8 +14,7 @@
 | P1 骨架 | T1-T4 | 可加载的插件骨架、i18n、平台层、api | T0 |
 | P2 基础能力 | T5-T9 | 文件操作、打开方式、剪贴板、编码批量、搜索 | T4 |
 | P3 标签增强 | T10 | 标签右键 3 项 | T4 |
-| P4 核心功能 | T11-T14 | 批量改名 4 模块 | T4 |
-| P5 收尾 | T15-T18 | 菜单、遮蔽、设置、文档 | 全部 |
+| P4 收尾 | T16-T18 | 菜单、遮蔽、设置、文档 | 全部 |
 
 ---
 
@@ -88,8 +87,8 @@
 | 项 | 内容 |
 |---|---|
 | 文件 | `mysidebar/cmds/file_ops.py`、`mysidebar/cmds/trash_cmd.py` |
-| 命令 | `MySidebarNewFileCommand`（多选目录 + 父目录创建）、`MySidebarDuplicateCommand`、`MySidebarMoveCommand`、`MySidebarMoveToTrashCommand`、`MySidebarRevealInFileManagerCommand` |
-| 说明 | **不实现单文件重命名**（A 类，用原生 `rename_path`）；`reveal` 仅作菜单项落地，能力由 `platform.reveal()` 提供 |
+| 命令 | `MySidebarDuplicateCommand`、`MySidebarMoveCommand`、`MySidebarMoveToTrashCommand` |
+| 说明 | **不实现单文件重命名**（A 类，用原生 `rename_path`）；**不实现新建文件**（A 类，原生 `new_file_at` 已覆盖，已删除插件版避免重复）；**侧边栏不提供「定位」菜单项**（与原生 `Reveal in Finder` 完全等价，属 A 类重复，仅保留标签右键的定位能力） |
 | 回收站 | `confirm_before_trash` 为真时先 `show_ok_cancel_dialog`；`trash.is_available()` 为假或单项失败时回落「永久删除确认」；成功后关闭已删除文件的视图并刷新侧边栏 |
 | `is_visible` | 带 `paths` 参数，严格返回 bool |
 | 通过标准 | 多选 2 个目录分别新建成功；对 `a/b/c/x.txt` 路径的新建自动建 `a/b/c`；复制副本自动命名 `x copy.txt` 并递增；移动后视图 retarget 正确；删除后进入系统回收站且标签被关闭 |
@@ -101,9 +100,9 @@
 | 项 | 内容 |
 |---|---|
 | 文件 | `mysidebar/cmds/open.py` |
-| 命令 | `MySidebarOpenWithDefaultCommand`、`MySidebarOpenInNewWindowCommand`、`MySidebarOpenInOtherGroupCommand`（右侧打开） |
-| 不做 | 打开所在目录（原生 `open_containing_folder`）、在终端打开（原生 `open_terminal`）、在文件夹中查找（原生 `find_in_folder`） |
-| 通过标准 | 图片/PDF 用系统程序打开；新窗口打开后原窗口不变；右侧打开后光标停在原视图 |
+| 命令 | `MySidebarOpenWithDefaultCommand`、`MySidebarOpenInNewWindowCommand` |
+| 不做 | 打开所在目录（原生 `open_containing_folder`）、在终端打开（原生 `open_terminal`）、在文件夹中查找（原生 `find_in_folder`）；**不做「在另一分组打开」**（分屏拖拽与 `View → Layout` 已覆盖，且 `open_file(group=)` 无法处理目录与单分组场景） |
+| 通过标准 | 图片/PDF 用系统程序打开；新窗口打开后原窗口不变；目录在新窗口中成为项目根 |
 
 ---
 
@@ -144,7 +143,7 @@
 |---|---|
 | 文件 | `mysidebar/cmds/search.py` |
 | 定位 | **不做第二个 Goto Anything**。只把搜索结果变成可多选的批量操作清单 |
-| 命令 | `MySidebarSearchFilesCommand`（生成结果 scratch 视图）、`MySidebarSearchTrashCommand`、`MySidebarSearchRenameCommand`、`MySidebarSearchCopyCommand` |
+| 命令 | `MySidebarSearchFilesCommand`（生成结果 scratch 视图）、`MySidebarSearchTrashCommand`、`MySidebarSearchCopyCommand` |
 | 约束 | 遍历在 `set_timeout_async`；结果分批 append（每批 200 行），避免一次大 insert 卡 UI；上限 `search_result_limit`；排除 `exclude_dirs_for_search`；多根目录时每根按自身为基准生成相对路径 |
 | 行到路径映射 | 结果视图只存文本行，行→绝对路径映射存于视图设置 `my_sidebar_search_lines`；批量动作按选中行查表，重名行追加 `  (n)` 后缀保证唯一 |
 | 通过标准 | 5000 文件目录不卡 UI；结果视图只读且为 scratch；选中 3 行送回收站后 3 个文件均进回收站 |
@@ -156,115 +155,14 @@
 | 项 | 内容 |
 |---|---|
 | 文件 | `mysidebar/cmds/tab.py` |
-| 命令 | `MySidebarTabRevealCommand`、`MySidebarTabCopyRelativePathCommand`、`MySidebarTabOpenDirCommand` |
+| 命令 | `MySidebarTabRevealCommand`、`MySidebarTabCopyPathCommand`、`MySidebarTabConvertEncodingCommand` |
 | 统一取视图 | `_resolve_tab_view(window, group, index)`：`sheets_in_group(group)` → 越界返回 None → `isinstance(sheet, sublime.View)` → `file_name()` 非空 → 返回 |
 | **禁止** | 使用 `window.active_view()`（会取到当前聚焦标签而非被右键标签） |
-| `is_visible` | 三命令均带 `group`/`index` 参数并返回严格 bool；Reveal 与 OpenDir 还需文件存在；CopyRelativePath 还需文件在某项目根内 |
+| `is_visible` | 三命令均带 `group`/`index` 参数并返回严格 bool；三项均要求文件存在；ConvertEncoding 额外排除 scratch 视图 |
 | 菜单 | 包根 `Tab Context.sublime-menu`、`Tab Sidebar Context.sublime-menu` 追加三项，`args` 为 `{"group": -1, "index": -1}` |
 | `is_enabled` | 与 `is_visible` 返回同一 bool，防止菜单隐藏而命令面板仍可执行 |
-| 多项目基准 | 相对路径取「包含该文件且路径最长」的项目根，不在任何根内时提示 `tab.no_root` |
-| 通过标准 | 在**非活动标签**上右键，定位到的是该标签的文件而不是当前活动文件；图片预览标签上三项不显示；未保存新标签上三项不显示；多项目下相对路径以最近项目根为基准 |
-
----
-
-### T11 批量改名 patterns
-
-| 项 | 内容 |
-|---|---|
-| 文件 | `mysidebar/batch/options.py`（`RenameOptions`）、`mysidebar/batch/patterns.py`（`apply` / `validate_options` / `PatternError`） |
-| 函数 | `apply(rel_old, options, index=0) -> str`；`validate_options(options) -> RenameOptions` |
-| 规则 | `$n`/`${n}` → `\g<n>`；替换串反斜杠预转义为字面量；残留 `$\d` 抛 `PatternError`；按 `scope` 作用于末段文件名或整个相对路径 |
-| 序号模式 | `prefix + zfill(start + index) + suffix`；恒非空，不设空结果校验 |
-| 归一化 | `normalized()`：`digits` 收敛 1..10、`start` 非负、`mode`/`scope` 非法值回落默认值，后续层不重复校验 |
-| 错误分类 | `empty_pattern` / `bad_regex` / `group_out_of_range`（由 `re.sub` 的 `invalid group reference` 归类）/ `bad_result` / `empty_result`，文案经 i18n |
-| 通过标准 | 16 项用例全过（含 `$1`、`${1}`、双 scope、序号、反斜杠字面量、空模式、非法正则、分组越界、替换为空）；非法正则抛 `PatternError` 且文案经 i18n；纯函数无 ST 依赖 |
-
----
-
-### T12 批量改名 plan
-
-| 项 | 内容 |
-|---|---|
-| 文件 | `mysidebar/batch/plan.py` |
-| 结构 | `PlanItem`（old_abs/rel_old/rel_new/new_abs/kind/status/reason/needs_temp/depth）、`RenamePlan`（base/items/skipped_symlinks/error + `actionable()`/`counts()`） |
-| 函数 | `collect`、`compute`、`validate` |
-| 核心 | `base` = 最深公共父，**永不进入计划**，但选中目录等于 base 时仍列举其内容；按 `recursive`/`include_dirs` 收集；symlink 跳过并计数；base 不可写时 `error=base_readonly` 提前返回 |
-| 相对路径 | `rel_old` 用 `os.path.relpath` 后**不得再 normalize**，否则会拼回绝对路径 |
-| validate 顺序 | ①unchanged→skipped ②shape→invalid ③unique→conflict ④disk→conflict ⑤cycle→needs_temp；**顺序不可颠倒** |
-| 大小写不敏感卷 | `lexists` 命中但 `os.path.samefile(old,new)` 成立时放行；路径等价统一用 `_key()=normcase(normalize())`，macOS/Linux 上 `normcase` 不折叠大小写 |
-| 通过标准 | `../` 逃逸判 invalid；同批重名判 conflict；磁盘已存在判 conflict；单侧改名撞现存文件判 conflict；环与纯大小写判 `needs_temp=True`；symlink 跳过计数；单文件选择 base 为其父目录；纯函数可单测 |
-
----
-
-### T13 批量改名 execute
-
-| 项 | 内容 |
-|---|---|
-| 状态 | 已完成 |
-| 文件 | `mysidebar/batch/execute.py` |
-| 结构 | `RenameRecord`（source/target/kind）、`ExecutionResult`（status/records/failure_*/temp_root + `done()`/`moved_pairs()`） |
-| 函数 | `build_steps`、`execute`、`rollback`、`undo` |
-| 步骤 | A `temp_in`（全部 needs_temp 项沉底）→ B `dir`（depth 逆序）→ C `file` → D `temp_out`（中间名落终态） |
-| 正确性 | needs_temp 先腾空旧名，temp_out 最后避免与普通项争抢；目录批逆序保证子目录先改名；文件批在目录批之后保证 target 必终态；落点用 `dir_final[rel_old]` 查表，祖先改名自动跟随 |
-| 原子性 | `_rename` 前置校验源与父目录，父目录缺失直接抛 `OSError`（禁止 `makedirs` 兜底）；任一步失败 → 逆序 `rollback` → `_cleanup_temp` → 返回 `aborted` |
-| 视图重定向 | `moved_pairs()` 过滤 `temp_in` 记录，中间名永不进入 retarget 输入 |
-| 规模 | 上限 `batch_rename_max_items`（5000），**同步执行**；超 2000 项确认框提示预估耗时 |
-| 通过标准 | 目录树改名后子孙全在终态；环形改名（A→B、B→A）成功；大小写变化成功；中途注入异常后回滚到原名且临时区不残留；视图 retarget 后 `file_name()` 正确 |
-
-**自测覆盖（`_check.py`，全部通过）**：文件批改名、目录+文件混合、环改名、纯大小写改名（`x.txt → X.txt`）、swap 双向改名与内容校验、中途失败回滚、临时区清理、`undo` 恢复原名。连续 5 次运行 `failures 0`。
-
-**已修复的测试侧缺陷**：`case` 用例原先复用 `cyc_root`，与 `swap`/`ring` 用例共享目录导致状态污染——macOS 大小写不敏感卷上残留 `X.txt` 使 `_validate_disk` 的 `_same_file` 放行分支命中，`needs_temp` 偶发保持 `False`。已改为独立 `case_root` 目录并追加 `status == STATUS_OK` 前置断言。
-
-**已修复的实现侧缺陷（`./tmp/` 实测发现）**：
-
-1. **中间名链路撤销断裂**：`needs_temp` 项产生 `temp_in(旧名→staged)` + `temp_out(staged→新名)` 两条记录。原 `undo()` 严格逆序回放，先做 `新名→staged`，而临时区已被 `_cleanup_temp` 删除，路径不存在 → 撤销立即返回失败、磁盘零改动。修复：`RenameRecord` 增加 `origin`，`temp_out` 写入逻辑起点，`moved_pairs()` / `undo()` / `rollback.build_entry()` 统一按 `(origin or source, target)` 折叠。
-2. **大小写还原被守卫误拦**：APFS 大小写不敏感，`abc.txt` 与 `ABC.txt` 同 inode 同目录项，`lexists(origin)` 为真被误判为「旧名被占用」。修复：守卫叠加 `os.path.samefile` 判定——同实体时**仍执行 `os.rename`** 以改写目录项大小写，仅当确为不同文件才判冲突。
-
-**回归断言（已加入 `_check.py`）**：`case undo count/no failure/tree`（进程内大小写撤销）、`undo case entry old/new`（日志折叠为真实原始路径）、`undo case status/reverted/tree`（跨进程大小写撤销且文件名真正改回）。
-
----
-
-### T14 批量改名 rollback
-
-| 项 | 内容 |
-|---|---|
-| 状态 | 已完成 |
-| 文件 | `mysidebar/batch/rollback.py`，另需 `platform.user_dir()`（新增）与 `execute.execute(record_log=)` / `ExecutionResult.log_saved`（新增） |
-| 职责边界 | `execute.rollback()` = 执行期内存态回滚；`rollback.py` = 事后撤销（持久化日志 + 预检）；后者单向依赖 `execute.STEP_TEMP_IN`，不反向依赖 |
-| 函数 | `build_entry`、`log_path`、`save_log`、`load_log`、`clear_log`、`undo_last`；结果对象 `UndoOutcome`（`ok`/`empty`/`blocked`/`partial`） |
-| 日志 | `Packages/User/MySideBar/rename_log.json`（经 `platform.user_dir()`），`{"version", "timestamp", "base", "ops":[{old,new,kind}]}` |
-| ops 口径 | **剔除 `temp_in` 记录**，否则逆序撤销会先把文件 rename 回 uuid 中间名；`ops` 为空时不写日志 |
-| 写入 | 临时文件 + `os.replace` 原子替换，避免半截 JSON |
-| 有效性 | JSON 损坏 / 非 dict / ops 空 / 条目缺 old-new / timestamp 非数值 → `None`；超过 `MAX_AGE_SECONDS`（7 天）→ 过期 `None` |
-| 撤销原子性 | 两阶段：先 preflight 全量校验（`lexists(new)` 真且 `old` 未被占用，`old` 命中时用 `samefile` 兜底大小写不敏感卷），任一不满足 → `blocked` 且**零改动**；再逐条逆序 `os.rename(new, old)` |
-| 日志清理 | 仅 `ok` 时 `clear_log`；`blocked`/`partial` 保留日志以便修复现场后重试 |
-| retarget | 成功后以 `(new, old)` 方向回传，视图恢复原名 |
-| 接口适配 | `execute.moved_pairs()` / `rollback` 的 pairs 是 `[(source,target)]` 列表，而 `ViewResolver.retarget_views()` 收 dict；命令层必须走 `ViewResolver.retarget_pairs(pairs)`，直接传列表会静默失效 |
-| 保留 | 仅最近一次，覆盖写 |
-| 通过标准 | 撤销后全部恢复原名且视图同步；撤销时目标已存在则中止且**磁盘无任何改动**；日志不污染项目目录 |
-
-**自测覆盖（`_check.py` T14 段，连续 3 次 `failures 0`）**：日志条目剔除 `temp_in`、落盘与读回、过期丢弃、撤销恢复原名与内容不变、retarget 方向正确、成功后日志清空、无日志返回 `empty`、旧名被占用返回 `blocked` 且磁盘零改动且日志保留、缺失与损坏日志返回 `None`、空 ops 拒绝写入、`clear_log` 可用。
-
-**健壮性补充口径**：`execute(record_log=False)` 供自测与预览演练使用，避免测试污染真实 User 目录日志；`log_saved` 暴露保存结果，UI 可据此提示「已改名但撤销记录未能写入」。
-
----
-
-### T15 批量改名命令层与预览 UI（已完成）
-
-| 项 | 内容 |
-|---|---|
-| 文件 | `mysidebar/cmds/batch_rename.py`、`mysidebar/ui/preview.py`、`mysidebar/ui/preview_model.py`，包根 `MySideBar Rename Preview.sublime-syntax` |
-| **输入链变更（实测否定原计划）** | 原计划「`InputHandler` 链、不用 `show_input_panel`」**不可实现**：ST 4215 仅 7 个硬编码面板名、二进制无 `SideBarInputHandler`/`sublime-panel` 注册机制，`CommandInputHandler` 只服务命令面板单行输入，无法产出三行并排表单。改为 **`show_quick_panel` 预设（7 项）+ 分段 `show_input_panel`（带上次值回填）**，交互 3 步封顶 |
-| 预设维度 | 一次选择同时确定 mode（regex/sequence）、scope（name/path）、recursive、include_dirs 四维，规避 `ListInputHandler` 单值返回的局限 |
-| 预览 | 复用预览视图（`PREVIEW_FLAG` 标记）；首行汇总 + 空行 + 逐项 `旧路径 -> 新路径 [状态] 原因`；`sublime-syntax` 按行尾 `[ok]/[skipped]/[conflict]/[invalid]` 着色 |
-| 行号映射 | `HEADER_BLANK_LINES` 单一常量同时驱动渲染分隔符与选区偏移，禁止两处硬编码 |
-| 执行 | 「全部执行」与「仅执行选中行」；选中项**只取 `status == ok`**，冲突项必须修正模式后重跑 |
-| 撤销 | 命令层接 `rollback.undo_last`，`is_enabled` 用内存缓存 `_undo_cache`，由 `on_plugin_loaded` 预热，**禁止在 `is_enabled` 中读盘** |
-| 通过标准 | 非法正则留在当前步不前进（`plan.error` 直接提示，不进入预览）；预览状态着色正确；仅执行选中行时其余项不变 |
-
-**自测覆盖（`_check.py` T15 段，`failures 0`）**：行数构造、`[ok]` 行尾标记、未变更项落 `skipped`、冲突场景出现 `conflict`/`skipped`、汇总文案各字段、选中全量/空/单行、`subset_plan` 保持 base 与 `skipped_symlinks`、原因文案后缀与 `->` 形状。
-
-**遗留说明**：`ui/preview.py` 依赖 `sublime` 与 `assign_syntax`，属 ST 运行时行为，仅能在 ST 内验证，离线自测只覆盖 `preview_model.py`。语法文件在包根（质量门禁 7）。
+| 转换编码 | 委托 `window.run_command("my_sidebar_convert_encoding", {"paths": [file]})`，不复制编码转换逻辑 |
+| 通过标准 | 在**非活动标签**上右键，定位到的是该标签的文件而不是当前活动文件；图片预览标签上三项不显示；未保存新标签上三项不显示；scratch 标签上转换编码不显示 |
 
 ---
 
@@ -279,12 +177,12 @@
 
 **落地结论**：
 
-1. `Context.sublime-menu` 仅承载批量改名三项（`Execute All` / `Execute Selected` / `Undo Last Batch Rename`）。前两项与分隔符带 `context: [{"key": "mysidebar_rename_preview", "operator": "equal", "operand": true}]`，撤销项**不加 context**，保证普通文件视图右键也能撤销上一次批量改名。
-2. `Context.sublime-menu` 已加入 `i18n._MENU_TARGETS`，caption 随 `ui_language` 翻译；写入位置为 `Packages/User/MySideBar/`，与既有四份菜单同一机制。
-3. 翻译依赖 `_CAPTION_KEYS` 反查 `*.caption` 后缀键，故三语文案统一为 `rename.execute_all.caption` / `rename.execute_selection.caption` / `rename.undo.caption`，**英文原文必须与 strings 中的值逐字符一致**，否则该项静默保持英文。
-4. `Commands.sublime-commands` 补齐三条命令面板入口，caption 统一 `MySideBar: ...` 前缀，便于命令面板聚合检索。
+1. `Context.sublime-menu` 内容为空数组 `[]`，即编辑器右键不注入任何自定义菜单项。该文件保留是为了让 `i18n._MENU_TARGETS` 的翻译机制维持完整文件名集合，避免切换语言时报告源文件缺失。
+2. `Context.sublime-menu` 已加入 `i18n._MENU_TARGETS`；其内容为空时 `apply_menu()` 走「空菜单跳过」分支，不写入 User 层也不报错。
+3. `Commands.sublime-commands` 只登记实际存在的命令，caption 统一 `MySideBar: ...` 前缀，便于命令面板聚合检索；已随功能下线同步移除失效入口。
+4. 三语文案表只保留仍在使用中的键，功能下线后对应的 `*_caption` 与错误提示键须同步删除，避免残留死文案。
 
-**自测覆盖（`_check.py` 菜单段）**：JSON 可解析、命令顺序为三项且与命令类名一致、3 项带 preview context 且 `operand` 为 `true`、撤销项无 context、三项 caption 均能在 `_CAPTION_KEYS` 反查到键、三语表全部含该键、`i18n._MENU_TARGETS` 已注册 `Context.sublime-menu`。
+**自测覆盖（`_check.py` 菜单段）**：JSON 可解析、`Context.sublime-menu` 必须为空数组、三语文案不得残留已下线功能的键、设置项不得残留已下线功能的项、`i18n._MENU_TARGETS` 已注册 `Context.sublime-menu`。
 
 **遗留说明**：菜单文件**实际加载效果**属 ST 运行时行为（需重启 ST 后人工确认右键菜单出现），离线自测只校验资源结构与翻译键完整性。
 
@@ -296,11 +194,11 @@
 |---|---|
 | 文件 | `mysidebar/cmds/shadow.py` |
 | 默认值 | `menu_shadow_default_items: true` |
-| 理由 | 3 项均判定为 **D 类（原生体验差，自研替换）**；D 类要求替换真正发生，否则原生永久删除与单选新建仍暴露在菜单中，与自研项并存 |
-| 可遮蔽 | **仅 3 项**：`delete_file`、`delete_folder`、`new_file_at` |
-| 禁止遮蔽 | `copy_path_sidebar`、`new_folder`、`open_folder`、`open_containing_folder`、`open_terminal`、`find_in_folder`、`reveal_link_source`、`prompt_add_folder`、`remove_folder`、`refresh_folder_list`、`rename_path` |
+| 理由 | 2 项均判定为 **D 类（原生体验差，自研替换）**；D 类要求替换真正发生，否则原生永久删除仍暴露在菜单中，与自研回收站删除并存 |
+| 可遮蔽 | **仅 2 项**：`delete_file`、`delete_folder` |
+| 禁止遮蔽 | `copy_path_sidebar`、`new_file_at`（插件版已删，遮蔽会导致无法新建文件）、`new_folder`、`open_folder`、`open_containing_folder`、`open_terminal`、`find_in_folder`、`reveal_link_source`、`prompt_add_folder`、`remove_folder`、`refresh_folder_list`、`rename_path` |
 | 硬约束 | `shadow.py` 独立，不 import 业务模块；加载异常必须捕获记录，**不得导致原生命令消失**；用户可在设置中关闭以恢复原生项 |
-| 通过标准 | 默认状态下 3 项被替换且其余与原生命中一致；设置关闭后菜单与原生完全一致；人为让 shadow.py 抛异常，原生命令仍正常显示 |
+| 通过标准 | 默认状态下 2 项被替换且其余与原生命中一致；设置关闭后菜单与原生完全一致；人为让 shadow.py 抛异常，原生命令仍正常显示 |
 
 ---
 
@@ -309,7 +207,7 @@
 | 项 | 内容 |
 |---|---|
 | 文件 | `MySideBar.sublime-settings`、`messages/install.txt`、`README.md` |
-| 设置项 | `ui_language`（null）、`encoding_max_bytes`（20971520）、`menu_shadow_default_items`（false）、`batch_rename_max_items`（5000）、`search_result_limit`（5000）、`exclude_dirs_for_search` |
+| 设置项 | `ui_language`（null）、`encoding_max_bytes`（20971520）、`menu_shadow_default_items`（false）、`search_result_limit`（5000）、`exclude_dirs_for_search` |
 | README | **必须包含「原插件功能 → 原生命令」对照表**，列出 7 项 A 类功能去向，避免用户卸载后找不到功能 |
 | 通过标准 | 设置全部有默认值与注释；README 对照表覆盖 7 项 A 类 |
 
@@ -326,7 +224,7 @@
 | 5 | 批量操作必须有回滚路径 |
 | 6 | **所有 `is_visible` / `is_enabled` / `is_checked` / `description` 签名必须与 `run()` 参数一致，且返回严格 bool**，否则菜单项静默失效 |
 | 7 | **所有 `*.sublime-menu` / `*.sublime-keymap` / `*.sublime-settings` / `*.sublime-commands` / `*.sublime-syntax` 文件名必须与 ST 实际资源名逐字一致，且必须位于包根**（子目录不会被扫描且无报错） |
-| 8 | `batch/` 与 `api.py` 不得 import `sublime_plugin`，必须可脱离 ST 单测 |
+| 8 | `api.py`、`platform.py`、`clipboard.py`、`encodings.py`、`encoding_detect.py`、`trash.py` 不得 import `sublime_plugin`，必须可脱离 ST 单测 |
 | 9 | 标签相关命令禁止使用 `window.active_view()` 取被右键标签 |
 | 10 | 编码转换前必须校验 `view.is_loaded()`，禁止对未加载视图写盘 |
 | 11 | **插件生命周期函数只能定义在包根 `.py` 入口文件**，子包 `__init__.py` 的 `plugin_loaded` 不会被 ST 调用 |
@@ -340,8 +238,7 @@
 ```
 T0 → T1 → T2 → T3 → T4
                   ├── T5 → T6 → T7 → T8 → T9
-                  ├── T10
-                  └── T11 → T12 → T13 → T14 → T15
+                  └── T10
                                     T16 → T17 → T18
 ```
 
@@ -351,8 +248,7 @@ T0 → T1 → T2 → T3 → T4
 | P1 完成 | 插件可加载、可切换语言、api 可单测；包根入口与包根资源均被 ST 实际加载 |
 | P2 完成 | 文件操作、打开方式、剪贴板、编码、搜索全部可用 |
 | P3 完成 | 非活动标签右键定位正确 |
-| P4 完成 | 批量改名含环与大小写变化全通过，可撤销 |
-| P5 完成 | 菜单与原生无重复；遮蔽默认开启且可安全关闭；README 含 A 类对照表 |
+| P4 完成 | 菜单与原生无重复；遮蔽默认开启且可安全关闭；README 含 A 类对照表 |
 
 ---
 
@@ -362,7 +258,7 @@ T0 → T1 → T2 → T3 → T4
 
 | 检查 | 结论 |
 |---|---|
-| 11 项自研功能是否都有对应任务 | T5(新建/副本/移动)、T6(三种打开)、T7(剪贴板+路径)、T8(批量编码)、T9(搜索)、T10(标签 3 项)、T11-T15(批量改名) 全覆盖 |
+| 11 项自研功能是否都有对应任务 | T5(新建/副本/移动)、T6(三种打开)、T7(剪贴板+路径)、T8(批量编码)、T9(搜索)、T10(标签 3 项) 全覆盖 |
 | 7 项 A 类功能是否被误实现 | T5 明确不实现重命名；T6 明确不实现打开目录/终端/查找；T8 明确仅批量 |
 | 标签 3 项是否各自有边界 | 技术方案 7.2 的 19-23 与 T10 通过标准一一对应 |
 | 是否有无效验证项 | 已删除菜单覆盖、Tab Context 是否存在、GB18030 是否存在三项（已被方案实测确认） |
@@ -373,9 +269,9 @@ T0 → T1 → T2 → T3 → T4
 
 | 维度 | 结论 |
 |---|---|
-| 任务粒度 | 18 个任务，T5~T9 可并行，T11~T15 必须串行 |
+| 任务粒度 | 13 个任务，T5~T9 可并行，T10 独立，T16~T18 收尾 |
 | 依赖关系 | 全部依赖 T4；无循环依赖 |
-| 可测试性 | `batch/`（T11-T13）、`api.py`（T4）可脱离 ST 单测，覆盖核心算法 |
+| 可测试性 | `api.py`（T4）、`platform.py` / `clipboard.py` / `encodings.py` / `encoding_detect.py` / `trash.py` 可脱离 ST 单测，覆盖核心逻辑 |
 | 迭代成本 | 功能收敛后任务数较 v1.x 减少；无「后续再优化」类任务 |
 | 风险覆盖 | 9 项风险（V1-V9）均有对应验证或验收手段 |
 | 包结构正确性 | 已修正：包根入口 `MySideBar.py` 承担生命周期；全部资源文件位于包根 |

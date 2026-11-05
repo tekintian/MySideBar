@@ -192,6 +192,24 @@ class ViewResolver(object):
         return count
 
     @staticmethod
+    def dirty_views_for_paths(paths):
+        targets = [os.path.normcase(plat.normalize(p)) for p in (paths or []) if p]
+        if not targets:
+            return []
+        found = []
+        for window in sublime.windows():
+            for view in window.views():
+                fname = view.file_name()
+                if not fname:
+                    continue
+                if os.path.normcase(plat.normalize(fname)) not in targets:
+                    continue
+                if not view.is_dirty():
+                    continue
+                found.append(fname)
+        return found
+
+    @staticmethod
     def retarget_views(mappings):
         for window in sublime.windows():
             for view in window.views():

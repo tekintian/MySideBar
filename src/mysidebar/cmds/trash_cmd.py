@@ -3,7 +3,6 @@ import sublime_plugin
 
 from .. import i18n
 from .. import trash
-from .. import platform as plat
 from ..api import SideBarSelection, ViewResolver
 
 
@@ -23,23 +22,6 @@ def _refresh(window):
 
 def _targets(paths):
     return SideBarSelection(paths).without_child_items()
-
-
-class MySidebarRevealInFileManagerCommand(sublime_plugin.WindowCommand):
-    def run(self, paths=None):
-        items = _targets(paths)
-        if not items:
-            return
-        failed = 0
-        for item in items:
-            if not plat.reveal(item.path, dir_only=item.is_dir):
-                _report(i18n.t("reveal.failed", path=item.path))
-                failed += 1
-        if failed:
-            _status(self.window, i18n.t("reveal.failed_count", count=failed))
-
-    def is_visible(self, paths=None):
-        return bool(paths)
 
 
 class MySidebarMoveToTrashCommand(sublime_plugin.WindowCommand):

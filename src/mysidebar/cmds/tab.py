@@ -29,15 +29,14 @@ def _exists(window, group, index):
     return bool(path and os.path.exists(path))
 
 
-def _inner_root(window, path):
-    best = None
-    for folder in window.folders():
-        normalized = plat.normalize(folder)
-        if not plat.is_within(path, normalized):
-            continue
-        if best is None or len(normalized) > len(best):
-            best = normalized
-    return best
+def _convertible(window, group, index):
+    view = _target_view(window, group, index)
+    if view is None or not view.is_valid():
+        return False
+    if view.is_scratch():
+        return False
+    path = plat.normalize(view.file_name())
+    return bool(path and os.path.exists(path))
 
 
 class MySidebarTabRevealCommand(sublime_plugin.WindowCommand):
@@ -56,48 +55,32 @@ class MySidebarTabRevealCommand(sublime_plugin.WindowCommand):
         return bool(_exists(self.window, group, index))
 
 
-class MySidebarTabCopyRelativePathCommand(sublime_plugin.WindowCommand):
+class MySidebarTabCopyPathCommand(sublime_plugin.WindowCommand):
     def run(self, group=-1, index=-1):
         path = _target_path(self.window, group, index)
         if path is None:
             _status(self.window, "tab.no_target")
             return
-        root = _inner_root(self.window, path)
-        if root is None:
-            _status(self.window, "tab.no_root")
-            return
-        try:
-            relative = plat.normalize(os.path.relpath(path, root))
-        except (OSError, ValueError):
-            _status(self.window, "tab.no_root")
-            return
-        sublime.set_clipboard(relative)
-        _status(self.window, "tab.copied_relative")
-
-    def _available(self, group=-1, index=-1):
-        path = _target_path(self.window, group, index)
-        if not path:
-            return False
-        return _inner_root(self.window, path) is not None
-
-    def is_visible(self, group=-1, index=-1):
-        return bool(self._available(group, index))
-
-    def is_enabled(self, group=-1, index=-1):
-        return bool(self._available(group, index))
-
-
-class MySidebarTabOpenDirCommand(sublime_plugin.WindowCommand):
-    def run(self, group=-1, index=-1):
-        path = _target_path(self.window, group, index)
-        if path is None:
-            _status(self.window, "tab.no_target")
-            return
-        if not plat.reveal(path, dir_only=True):
-            _status(self.window, "tab.reveal_failed")
+        sublime.set_clipboard(path)
+        _status(self.window, "tab.copied_path")
 
     def is_visible(self, group=-1, index=-1):
         return bool(_exists(self.window, group, index))
 
     def is_enabled(self, group=-1, index=-1):
         return bool(_exists(self.window, group, index))
+
+
+class MySidebarTabConvertEncodingCommand(sublime_plugin.WindowCommand):
+    def run(self, group=-1, index=-1):
+        path = _target_path(self.window, group, index)
+        if path is None:
+            _status(self.window, "tab.no_target")
+            return
+        self.window.run_command("my_sidebar_convert_encoding", {"paths": [path]})
+
+    def is_visible(self, group=-1, index=-1):
+        return bool(_convertible(self.window, group, index))
+
+    def is_enabled(self, group=-1, index=-1):
+        return bool(_convertible(self.window, group, index))
