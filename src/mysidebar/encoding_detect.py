@@ -62,6 +62,50 @@ def _pure_ascii(raw):
         return False
 
 
+_AMBIGUOUS_SAMPLE = 64 * 1024
+_PUA_RATIO_MAX = 0.02
+
+
+def _non_ascii_window(raw):
+    if len(raw) <= _AMBIGUOUS_SAMPLE:
+        return raw
+    for index, byte in enumerate(raw):
+        if byte >= 128:
+            start = index
+            while start > 0 and raw[start - 1] >= 128:
+                start -= 1
+            return raw[start : start + _AMBIGUOUS_SAMPLE]
+    return raw[:_AMBIGUOUS_SAMPLE]
+
+
+def _text_is_plausible(text):
+    if not text:
+        return False
+    total = 0
+    pua = 0
+    for char in text:
+        if char in "\n\r\t":
+            continue
+        total += 1
+        code = ord(char)
+        if 0xE000 <= code <= 0xF8FF or 0xF0000 <= code <= 0x10FFFF:
+            pua += 1
+    if total == 0:
+        return True
+    return pua / float(total) <= _PUA_RATIO_MAX
+
+
+def _trusted_gb18030(raw):
+    sample = _non_ascii_window(raw)
+    try:
+        text = sample.decode("gb18030", "strict")
+    except (UnicodeDecodeError, LookupError, ValueError):
+        return None
+    if not _text_is_plausible(text):
+        return None
+    return encodings.GB18030
+
+
 def detect(path):
     if not path:
         return None
@@ -77,39 +121,4 @@ def detect(path):
         return None
     if _clean_utf8(raw):
         return encodings.UTF8
-    try:
-        raw.decode("gb18030", "strict")
-        return encodings.GB18030
-    except (UnicodeDecodeError, LookupError, ValueError):
-        return None
-
-
-_processed = {}
-
-
-def should_reopen(view):
-    if view is None or not view.is_valid():
-        return None
-    path = view.file_name()
-    if not path:
-        return None
-    name = detect(path)
-    if name is None:
-        return None
-    if view.encoding() == name:
-        return None
-    vid = view.id()
-    if _processed.get(vid) == name:
-        return None
-    _processed[vid] = name
-    return name
-
-
-def forget(view):
-    if view is None:
-        return
-    try:
-        vid = view.id()
-    except Exception:
-        return
-    _processed.pop(vid, None)
+    return _trusted_gb18030(raw)
