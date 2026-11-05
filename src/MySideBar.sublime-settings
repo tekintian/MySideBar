@@ -2,6 +2,8 @@
 	"ui_language": null,
 	"encoding_max_bytes": 20971520,
 	"auto_detect_encoding": true,
+	"encoding_auto_locales": "zh_CN",
+	"encoding_status_bar": true,
 	"batch_rename_max_items": 5000,
 	"search_result_limit": 5000,
 	"exclude_dirs_for_search": [".git", "node_modules", "vendor", "dist", "build"],

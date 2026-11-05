@@ -64,6 +64,11 @@ def _pure_ascii(raw):
 
 _AMBIGUOUS_SAMPLE = 64 * 1024
 _PUA_RATIO_MAX = 0.02
+_HALF_KANA_MAX = 0.30
+_CACHE_LIMIT = 512
+_UNKNOWN = object()
+
+_cache = {}
 
 
 def _non_ascii_window(raw):
@@ -95,20 +100,88 @@ def _text_is_plausible(text):
     return pua / float(total) <= _PUA_RATIO_MAX
 
 
-def _trusted_gb18030(raw):
+def _half_kana_ratio(text):
+    total = 0
+    half = 0
+    for char in text:
+        if char in "\n\r\t":
+            continue
+        total += 1
+        if 0xFF66 <= ord(char) <= 0xFF9D:
+            half += 1
+    if total == 0:
+        return 0.0
+    return half / float(total)
+
+
+def _script_is_plausible(text, spec):
+    if spec.py_codec == "shift_jis_2004":
+        return _half_kana_ratio(text) <= _HALF_KANA_MAX
+    return True
+
+
+def _trusted(raw, spec):
     sample = _non_ascii_window(raw)
+    if not sample:
+        return None
     try:
-        text = sample.decode("gb18030", "strict")
+        text = sample.decode(spec.py_codec, "strict")
     except (UnicodeDecodeError, LookupError, ValueError):
         return None
     if not _text_is_plausible(text):
         return None
-    return encodings.GB18030
+    if not _script_is_plausible(text, spec):
+        return None
+    return spec.name
 
 
-def detect(path):
+def _cache_key(path, locale):
+    return (path, locale or "")
+
+
+def _cached(key, mtime, size):
+    entry = _cache.get(key)
+    if entry is None:
+        return _UNKNOWN
+    if entry[0] != mtime or entry[1] != size:
+        return _UNKNOWN
+    return entry[2]
+
+
+def _remember(key, mtime, size, name):
+    if len(_cache) >= _CACHE_LIMIT:
+        _cache.clear()
+    _cache[key] = (mtime, size, name)
+
+
+def forget(path):
+    if not path:
+        return
+    target = os.path.normcase(os.path.abspath(path))
+    stale = [key for key in _cache if key[0] == target]
+    for key in stale:
+        _cache.pop(key, None)
+
+
+def detect(path, locale=None):
     if not path:
         return None
+    key = os.path.normcase(os.path.abspath(path))
+    try:
+        stat = os.stat(key)
+        mtime = stat.st_mtime
+        size = stat.st_size
+    except OSError:
+        return None
+    cached = _cached(_cache_key(key, locale), mtime, size)
+    if cached is not _UNKNOWN:
+        return cached
+    result = _detect_uncached(key, locale)
+    _remember(_cache_key(key, locale), mtime, size, result)
+    return result
+
+
+def _detect_uncached(path, locale):
     raw = _read(path)
     if raw is None:
         return None
@@ -121,4 +194,7 @@ def detect(path):
         return None
     if _clean_utf8(raw):
         return encodings.UTF8
-    return _trusted_gb18030(raw)
+    candidates = encodings.auto_candidates(locale)
+    if len(candidates) != 1:
+        return None
+    return _trusted(raw, candidates[0])

@@ -103,15 +103,89 @@ def _probe_file(lines, path):
             raw = fp.read()
         lines.append("  utf8 clean = %s" % encoding_detect._clean_utf8(raw))
         lines.append("  binary     = %s" % encoding_detect._looks_binary(raw))
-        for codec in ("utf-8", "gb18030", "gbk", "big5", "shift_jis"):
+        for spec in encodings.specs():
             try:
-                raw.decode(codec, "strict")
-                lines.append("  decode %-10s OK" % codec)
+                raw.decode(spec.py_codec, "strict")
+                lines.append("  decode %-22s OK   (%s)" % (spec.py_codec, spec.group))
             except Exception:
-                lines.append("  decode %-10s FAIL" % codec)
+                lines.append("  decode %-22s FAIL (%s)" % (spec.py_codec, spec.group))
     except Exception:
         lines.append("  full read failed")
     return detected
+
+
+CALIBRATION_SAMPLES = (
+    ("gb_sentence", "这是一个简体中文的句子，用来测试编码判断是否正确。", "gb18030"),
+    ("gb_long", "编码判定是一个需要谨慎处理的问题，因为一旦判断错误，"
+                "用户往往无法察觉，保存之后原文件就会永久损坏，且不可恢复。", "gb18030"),
+    ("gb_punct", "—— … ・ 　", "gb18030"),
+    ("big5_sentence", "這是一個繁體中文的長句子，用來測試編碼判斷是否正確。", "big5hkscs"),
+    ("big5_long", "編碼判定是一個需要謹慎處理的問題，因為一旦判斷錯誤，"
+                  "使用者往往無法察覺，儲存之後原檔案就會永久損壞，且無法復原。", "big5hkscs"),
+    ("big5_short", "繁體測試", "big5hkscs"),
+    ("sjis_long", "これは日本語の長い文章です。エンコーディングの判定が正しいかどうかをテストします。", "shift_jis_2004"),
+    ("sjis_short", "日本語テスト", "shift_jis_2004"),
+)
+
+CALIBRATION_CODECS = ("gb18030", "big5hkscs", "shift_jis_2004")
+
+
+def _calibration_ratios(text):
+    total = 0
+    pua = 0
+    for char in text:
+        if char in "\n\r\t":
+            continue
+        total += 1
+        code = ord(char)
+        if 0xE000 <= code <= 0xF8FF or 0xF0000 <= code <= 0x10FFFF:
+            pua += 1
+    if total == 0:
+        return 0.0
+    return pua / float(total)
+
+
+def _append_calibration(lines):
+    lines.append("[calibration] PUA ratio matrix, runs inside Sublime Text")
+    for name, text, real in CALIBRATION_SAMPLES:
+        lines.append("  %s (real=%s)" % (name, real))
+        try:
+            raw = text.encode(real)
+        except Exception as exc:
+            lines.append("    encode failed: %s" % exc)
+            continue
+        for cand in CALIBRATION_CODECS:
+            try:
+                decoded = raw.decode(cand, "strict")
+            except Exception:
+                lines.append("    -> %-16s STRICT-FAIL" % cand)
+                continue
+            ratio = _calibration_ratios(decoded)
+            if cand == real:
+                verdict = "CORRECT"
+            elif ratio > encoding_detect._PUA_RATIO_MAX:
+                verdict = "INTERCEPT"
+            else:
+                verdict = "PASS-THROUGH"
+            lines.append("    -> %-16s pua=%.3f %s" % (cand, ratio, verdict))
+    lines.append("")
+
+
+def _append_registry(lines, locale):
+    lines.append("[encoding registry]")
+    for spec in encodings.specs():
+        lines.append(
+            "  %-24s codec=%-18s family=%-8s group=%-6s priority=%s"
+            % (spec.name, spec.py_codec, spec.family, spec.group, spec.priority)
+        )
+    lines.append("  locale             = %r" % locale)
+    candidates = encodings.auto_candidates(locale)
+    lines.append("  auto candidates    = %s" % [spec.name for spec in candidates])
+    if len(candidates) != 1:
+        lines.append("  verdict            = SKIP auto reopen (needs exactly 1 candidate)")
+    else:
+        lines.append("  verdict            = auto reopen as %s" % candidates[0].name)
+    lines.append("")
 
 
 class MysidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
@@ -130,25 +204,36 @@ class MysidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
         lines.append("")
 
         lines.append("[settings]")
+        locale = encodings.DEFAULT_LOCALE
         try:
             settings = sublime.load_settings("MySideBar.sublime-settings")
             lines.append("  auto_detect_encoding = %r" % settings.get("auto_detect_encoding"))
             lines.append("  encoding_max_bytes   = %r" % settings.get("encoding_max_bytes"))
+            lines.append("  encoding_auto_locales= %r" % settings.get("encoding_auto_locales"))
+            lines.append("  encoding_status_bar  = %r" % settings.get("encoding_status_bar"))
+            raw_locale = settings.get("encoding_auto_locales", encodings.DEFAULT_LOCALE)
+            if isinstance(raw_locale, str) and raw_locale.strip():
+                locale = raw_locale
         except Exception:
             lines.append("  settings load failed")
         lines.append("")
 
         lines.append("[encoding_detect]")
         lines.append("  MAX_BYTES = %r" % getattr(encoding_detect, "MAX_BYTES", None))
+        lines.append("  PUA_RATIO_MAX = %r" % encoding_detect._PUA_RATIO_MAX)
+        lines.append("  cache size = %d" % len(encoding_detect._cache))
         lines.append("")
 
+        _append_registry(lines, locale)
+        _append_calibration(lines)
+
         lines.append("[sublime.list_encodings]")
-        encodings = _supported_encodings()
-        if encodings is None:
+        supported = _supported_encodings()
+        if supported is None:
             lines.append("  API NOT AVAILABLE in this build")
         else:
-            lines.append("  count = %s" % len(encodings))
-            for name in encodings:
+            lines.append("  count = %s" % len(supported))
+            for name in supported:
                 lines.append("    %s" % name)
         lines.append("")
 

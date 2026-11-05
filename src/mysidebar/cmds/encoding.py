@@ -3,6 +3,7 @@ import os
 import sublime
 import sublime_plugin
 
+from .. import encoding_detect
 from .. import encodings
 from .. import i18n
 from ..api import SideBarSelection, ViewResolver
@@ -13,19 +14,9 @@ DEFAULT_MAX_BYTES = 20 * 1024 * 1024
 LOAD_RETRY_LIMIT = 100
 LOAD_RETRY_DELAY = 50
 
-TARGET_LIST = (
-    encodings.GB18030,
-    encodings.UTF8,
-    encodings.UTF16LE,
-    encodings.UTF16BE,
-)
+TARGET_LIST = encodings.convertible()
 
-CAPTION_KEYS = {
-    encodings.GB18030: "encoding.target.gb18030",
-    encodings.UTF8: "encoding.target.utf8",
-    encodings.UTF16LE: "encoding.target.utf16le",
-    encodings.UTF16BE: "encoding.target.utf16be",
-}
+CAPTION_KEYS = dict((spec.name, spec.i18n_key) for spec in encodings.specs())
 
 
 def _report(message):
@@ -73,6 +64,39 @@ def _find_view(window, path):
     return None
 
 
+AUTO_DETECT = "auto-detect"
+
+GROUP_KEYS = {
+    encodings.FAMILY_UNICODE: "encoding.group.unicode",
+    encodings.FAMILY_ZH: "encoding.group.zh",
+    encodings.FAMILY_JA: "encoding.group.ja",
+    encodings.FAMILY_KO: "encoding.group.ko",
+    encodings.FAMILY_WESTERN: "encoding.group.western",
+}
+
+
+def _caption(name):
+    spec = encodings.spec_for(name)
+    group = GROUP_KEYS.get(spec.family) if spec else None
+    text = i18n.t(spec.i18n_key) if spec else name
+    if group is None:
+        return text
+    return "%s  %s" % (i18n.t(group), text)
+
+
+def _source_options():
+    names = (AUTO_DETECT,) + TARGET_LIST
+    return list(names), [_caption(AUTO_DETECT)] + [_caption(name) for name in TARGET_LIST]
+
+
+def _encode_target(text, target, codec):
+    payload = text.encode(codec)
+    marker = encodings.bom(target)
+    if marker and not payload.startswith(marker):
+        payload = marker + payload
+    return payload
+
+
 class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
     def run(self, paths=None):
         items = _targets(paths)
@@ -83,15 +107,15 @@ class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
         self._result = {"ok": 0, "skipped": 0, "failed": 0, "lines": []}
         self._source_encoding = None
         _status(self.window, "encoding.pick_source")
-        labels = [i18n.t(CAPTION_KEYS[name]) for name in TARGET_LIST]
+        self._source_names, labels = _source_options()
         self.window.show_quick_panel(labels, self._on_source)
 
     def _on_source(self, index):
         if index < 0:
             return
-        self._source_encoding = TARGET_LIST[index]
+        self._source_encoding = self._source_names[index]
         _status(self.window, "encoding.pick_target")
-        labels = [i18n.t(CAPTION_KEYS[name]) for name in TARGET_LIST]
+        labels = [_caption(name) for name in TARGET_LIST]
         self.window.show_quick_panel(labels, self._on_target)
 
     def _on_target(self, index):
@@ -163,7 +187,7 @@ class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
             self._advance()
             return
         source = getattr(self, "_source_encoding", None)
-        if source == target:
+        if source != AUTO_DETECT and source == target:
             self._add_skipped(i18n.t("encoding.skipped_same", path=item.path, encoding=target))
             self._advance()
             return
@@ -196,6 +220,12 @@ class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
 
     def _rewrite(self, item, view, target):
         source = getattr(self, "_source_encoding", None)
+        if source == AUTO_DETECT:
+            source = encoding_detect.detect(item.path)
+            if source is None:
+                _report("encoding auto detect failed %s" % item.path)
+                self._add_failed(i18n.t("encoding.auto_failed", path=item.path))
+                return
         source_codec = encodings.py_codec(source)
         target_codec = encodings.py_codec(target)
         if not source_codec or not target_codec:
@@ -214,7 +244,7 @@ class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
             self._add_failed(i18n.t("encoding.decode_failed", path=item.path, encoding=source))
             return
         try:
-            payload = text.encode(target_codec)
+            payload = _encode_target(text, target, target_codec)
         except Exception as exc:
             _report("encoding encode failed %s as %s: %s" % (item.path, target, exc))
             self._add_failed(i18n.t("encoding.encode_failed", path=item.path, encoding=target))
@@ -222,6 +252,7 @@ class MySidebarConvertEncodingCommand(sublime_plugin.WindowCommand):
         if not self._write_bytes(item.path, payload):
             self._add_failed(i18n.t("encoding.save_failed", path=item.path))
             return
+        encoding_detect.forget(item.path)
         self._reload_view(view, target)
         self._add_ok(item.path, source, target)
 

@@ -31,6 +31,23 @@ def _enabled():
         return True
 
 
+def _auto_locale():
+    try:
+        value = _settings().get("encoding_auto_locales", encodings.DEFAULT_LOCALE)
+    except Exception:
+        value = encodings.DEFAULT_LOCALE
+    if not isinstance(value, str):
+        return encodings.DEFAULT_LOCALE
+    return value
+
+
+def _single_candidate():
+    candidates = encodings.auto_candidates(_auto_locale())
+    if len(candidates) != 1:
+        return None
+    return candidates[0].name
+
+
 def _report(message):
     print("[MySideBar] %s" % message)
 
@@ -61,6 +78,7 @@ def _mark_handled(key, name):
 def _forget(key):
     _handled.pop(key, None)
     _pending.pop(key, None)
+    encoding_detect.forget(key)
 
 
 def target_encoding(view):
@@ -71,10 +89,16 @@ def target_encoding(view):
     path = view.file_name()
     if not path:
         return None
-    name = encoding_detect.detect(path)
+    expected = _single_candidate()
+    if expected is None:
+        _report("auto detect skipped: locale %s yields %d candidates"
+                % (_auto_locale(), len(encodings.auto_candidates(_auto_locale()))))
+        return None
+    name = encoding_detect.detect(path, _auto_locale())
     if name is None:
         return None
-    if name not in encodings.CONVERTIBLE:
+    if name != expected:
+        _report("auto detect rejected %s: not the locale candidate %s" % (name, expected))
         return None
     if view.encoding() == name:
         return None
@@ -83,12 +107,76 @@ def target_encoding(view):
     return name
 
 
+STATUS_KEY = "mysidebar_encoding"
+
+
+def _status_bar_enabled():
+    try:
+        return bool(_settings().get("encoding_status_bar", True))
+    except Exception:
+        return True
+
+
+def _is_widget(view):
+    try:
+        return bool(view.settings().get("is_widget"))
+    except Exception:
+        return True
+
+
+def refresh_status(view):
+    if view is None or not view.is_valid():
+        return
+    if _is_widget(view):
+        return
+    if not _status_bar_enabled():
+        try:
+            view.erase_status(STATUS_KEY)
+        except Exception:
+            pass
+        return
+    try:
+        name = view.encoding()
+    except Exception:
+        return
+    if not name:
+        try:
+            view.erase_status(STATUS_KEY)
+        except Exception:
+            pass
+        return
+    try:
+        view.set_status(STATUS_KEY, i18n.t("encoding.status_bar", encoding=name))
+    except Exception:
+        pass
+
+
+def clear_status():
+    for window in sublime.windows():
+        for view in window.views():
+            try:
+                view.erase_status(STATUS_KEY)
+            except Exception:
+                pass
+
+
 class MySidebarEncodingListener(sublime_plugin.EventListener):
     def on_load(self, view):
+        refresh_status(view)
         self._kick(view, immediate=True)
 
     def on_load_async(self, view):
+        refresh_status(view)
         self._kick(view, immediate=False)
+
+    def on_activated(self, view):
+        refresh_status(view)
+
+    def on_post_save(self, view):
+        refresh_status(view)
+
+    def on_activated_async(self, view):
+        refresh_status(view)
 
     def _kick(self, view, immediate):
         if not _enabled():
@@ -149,6 +237,7 @@ class MySidebarEncodingListener(sublime_plugin.EventListener):
             sublime.set_timeout(lambda: self._verify(view, key, name, attempt + 1), VERIFY_DELAY)
             return
         _clear_pending(key)
+        refresh_status(view)
         window = view.window()
         if window is not None and window.is_valid():
             window.status_message(
