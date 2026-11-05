@@ -1,0 +1,10 @@
+{
+	"ui_language": null,
+	"encoding_max_bytes": 20971520,
+	"auto_detect_encoding": true,
+	"batch_rename_max_items": 5000,
+	"search_result_limit": 5000,
+	"exclude_dirs_for_search": [".git", "node_modules", "vendor", "dist", "build"],
+	"confirm_before_trash": true,
+	"batch_rename_log_limit": 1
+}
