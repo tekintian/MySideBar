@@ -3,7 +3,13 @@ name: release
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish, e.g. v1.1.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,15 +20,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate tag
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          if ! printf '%s' "$TAG" | grep -Eq 'v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag '${TAG}' is not a semver release tag like v1.2.3"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "resolved tag=${TAG} version=${VERSION}"
 
       - name: Build archive
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="${{ steps.meta.outputs.version }}"
           grep -q "__version__ = '${VERSION}'" src/meta.py \
-            || { echo "src/meta.py __version__ != tag ${VERSION}"; exit 1; }
+            || { echo "src/meta.py __version__ != ${VERSION}"; exit 1; }
           head -n 1 src/messages/install.txt | grep -q "MySideBar ${VERSION}" \
-            || { echo "src/messages/install.txt != tag ${VERSION}"; exit 1; }
+            || { echo "src/messages/install.txt != ${VERSION}"; exit 1; }
           test "$(cat src/.python-version)" = "3.8"
           test -f src/.no-sublime-package
           test -f src/README.md
@@ -55,6 +82,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
           files: |
             dist/MySideBar-*.zip
             dist/SHA256SUMS.txt
@@ -82,12 +110,21 @@ jobs:
       - name: Mirror src/ into main
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          printf '%s' "$TAG" | grep -Eq 'v[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::tag '${TAG}' is not a semver release tag"; exit 1; }
+          VERSION="${TAG#v}"
           REPO="${GITHUB_REPOSITORY}"
           SHA=$(cut -d' ' -f1 "${RUNNER_TEMP}/dist/SHA256SUMS.txt")
           DATE=$(date -u '+%Y-%m-%d %H:%M:%S')
           SRC_SHA=$(git -C dev rev-parse --short HEAD)
           test -e dev/src/MySideBar.py || { echo "dev/src/MySideBar.py missing"; exit 1; }
+          test "$(grep -c "__version__ = '${VERSION}'" dev/src/meta.py)" = "1" \
+            || { echo "dev/src/meta.py __version__ != ${VERSION}"; exit 1; }
 
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
