@@ -1,7 +1,7 @@
-_dev/
 _res/
 tmp/
 t.sh
 __pycache__/
 *.pyc
 .DS_Store
+check_out.txt
