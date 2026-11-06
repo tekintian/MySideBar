@@ -1,0 +1,51 @@
+MySideBar 1.0.0 - Installation
+
+Thank you for installing MySideBar, a sidebar and file-management toolkit
+for Sublime Text 4.
+
+WHAT YOU GET
+
+  * Chinese mojibake auto-repair. Files saved as GB18030, Big5, Shift JIS,
+    EUC-KR or CP1252 are detected and reopened with the correct encoding
+    instead of showing garbled text.
+  * Deletion goes to the system trash on macOS, Windows and Linux, with no
+    third-party dependencies.
+  * Batch operations never block the UI and never discard your unsaved edits.
+  * Interface available in English, Simplified Chinese and Traditional
+    Chinese, switchable without restarting the editor.
+
+QUICK START
+
+  Right-click inside the sidebar, or right-click a file tab, to reach the
+  MySideBar entries.
+
+  The command palette offers:
+
+    MySideBar: List Files
+    MySideBar: Convert Encoding
+    MySideBar: UI Language - English
+    MySideBar: UI Language - 简体中文
+    MySideBar: UI Language - 繁體中文
+
+SETTINGS
+
+  Open Preferences -> Package Settings -> MySideBar -> Settings to adjust
+  behaviour. Notable options:
+
+    ui_language            null follows your ST interface language
+    auto_detect_encoding   enable or disable automatic encoding repair
+    encoding_max_bytes     size limit for automatic detection (20 MB default)
+    confirm_before_trash   ask before moving files to the trash
+
+  Defaults are never overwritten on upgrade; your own settings survive.
+
+TROUBLESHOOTING
+
+  Run "MySideBar: Doctor" from the command palette to print a diagnostic
+  report covering your Sublime Text version, platform, active encoding
+  settings and the supported encoding matrix.
+
+REQUIREMENTS
+
+  Sublime Text 4 (build 4000 or newer). MySideBar uses Sublime Text 4 APIs
+  and will not load on Sublime Text 3.

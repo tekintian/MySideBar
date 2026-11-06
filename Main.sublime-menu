@@ -1,0 +1,33 @@
+[
+	{
+		"caption": "Preferences",
+		"mnemonic": "n",
+		"id": "preferences",
+		"children": [
+			{ "caption": "-", "id": "my_sidebar_start" },
+			{
+				"caption": "MySideBar",
+				"children": [
+					{ "caption": "Settings", "command": "edit_settings", "args": {
+						"base_file": "${packages}/MySideBar/MySideBar.sublime-settings",
+						"default": "// MySideBar user settings. Overrides appear below.\n{\n\t$0\n}\n"
+					} },
+					{ "caption": "Default Settings", "command": "open_file", "args": {"file": "${packages}/MySideBar/MySideBar.sublime-settings"} },
+					{ "caption": "-" },
+					{
+						"caption": "Language",
+						"children": [
+							{ "caption": "English", "command": "my_sidebar_set_language", "args": {"language": "en"} },
+							{ "caption": "简体中文", "command": "my_sidebar_set_language", "args": {"language": "zh_CN"} },
+							{ "caption": "繁體中文", "command": "my_sidebar_set_language", "args": {"language": "zh_TW"} }
+						]
+					},
+					{ "caption": "Reapply Menus", "command": "my_sidebar_apply_menus" },
+					{ "caption": "-" },
+					{ "caption": "Encoding Doctor", "command": "my_sidebar_encoding_doctor" }
+				]
+			},
+			{ "caption": "-", "id": "my_sidebar_end" }
+		]
+	}
+]

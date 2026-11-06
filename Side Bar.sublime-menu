@@ -1,0 +1,18 @@
+[
+	{ "caption": "Open In New Window", "command": "my_sidebar_open_in_new_window", "args": {"paths": []} },
+	{ "caption": "Open With Default Application", "command": "my_sidebar_open_with_default", "args": {"paths": []} },
+	{ "caption": "-", "id": "my_sidebar_open" },
+	{ "caption": "Cut", "command": "my_sidebar_cut", "args": {"paths": []} },
+	{ "caption": "Copy", "command": "my_sidebar_copy", "args": {"paths": []} },
+	{ "caption": "Copy Relative Path", "command": "my_sidebar_copy_relative_path", "args": {"paths": []} },
+	{ "caption": "Copy File Name", "command": "my_sidebar_copy_file_name", "args": {"paths": []} },
+	{ "caption": "Paste", "command": "my_sidebar_paste", "args": {"paths": []} },
+	{ "caption": "-", "id": "my_sidebar_clipboard" },
+	{ "caption": "Duplicate", "command": "my_sidebar_duplicate", "args": {"paths": []} },
+	{ "caption": "Move To", "command": "my_sidebar_move", "args": {"paths": []} },
+	{ "caption": "Move To Trash", "command": "my_sidebar_move_to_trash", "args": {"paths": []} },
+	{ "caption": "-", "id": "my_sidebar_file_ops" },
+	{ "caption": "List Files", "command": "my_sidebar_list_files", "args": {"paths": []} },
+	{ "caption": "Convert Encoding", "command": "my_sidebar_convert_encoding", "args": {"paths": []} },
+	{ "caption": "-", "id": "my_sidebar_tools" }
+]

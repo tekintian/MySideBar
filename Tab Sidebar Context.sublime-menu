@@ -1,0 +1,6 @@
+[
+	{ "caption": "-", "id": "my_sidebar_tab_start" },
+	{ "caption": "Reveal In File Manager", "command": "my_sidebar_tab_reveal", "args": {"group": -1, "index": -1} },
+	{ "caption": "Copy Path", "command": "my_sidebar_tab_copy_path", "args": {"group": -1, "index": -1} },
+	{ "caption": "Convert Encoding", "command": "my_sidebar_tab_convert_encoding", "args": {"group": -1, "index": -1} }
+]

@@ -1,0 +1,9 @@
+[
+	{
+		"keys": ["enter"],
+		"command": "my_sidebar_list_files_open",
+		"context": [
+			{ "key": "my_sidebar_list_files_result", "operator": "equal", "operand": true }
+		]
+	}
+]

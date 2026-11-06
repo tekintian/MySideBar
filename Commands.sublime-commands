@@ -1,0 +1,13 @@
+[
+	{ "caption": "MySideBar: List Files", "command": "my_sidebar_list_files" },
+	{ "caption": "MySideBar: Move Listed To Trash", "command": "my_sidebar_list_files_trash" },
+	{ "caption": "MySideBar: Copy Listed Paths", "command": "my_sidebar_list_files_copy" },
+	{ "caption": "MySideBar: Open Listed File", "command": "my_sidebar_list_files_open" },
+	{ "caption": "-" },
+	{ "caption": "MySideBar: Convert Encoding", "command": "my_sidebar_convert_encoding" },
+	{ "caption": "MySideBar: Encoding Doctor", "command": "my_sidebar_encoding_doctor" },
+	{ "caption": "-" },
+	{ "caption": "MySideBar: UI Language - English", "command": "my_sidebar_set_language", "args": {"language": "en"} },
+	{ "caption": "MySideBar: UI Language - 简体中文", "command": "my_sidebar_set_language", "args": {"language": "zh_CN"} },
+	{ "caption": "MySideBar: UI Language - 繁體中文", "command": "my_sidebar_set_language", "args": {"language": "zh_TW"} }
+]
