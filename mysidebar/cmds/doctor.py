@@ -197,7 +197,7 @@ def _append_registry(lines, locale):
     lines.append("")
 
 
-class MysidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
+class MySidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
     def run(self):
         path = _report_path()
         lines = []

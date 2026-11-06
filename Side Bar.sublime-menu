@@ -6,6 +6,7 @@
 	{ "caption": "Copy", "command": "my_sidebar_copy", "args": {"paths": []} },
 	{ "caption": "Copy Relative Path", "command": "my_sidebar_copy_relative_path", "args": {"paths": []} },
 	{ "caption": "Copy File Name", "command": "my_sidebar_copy_file_name", "args": {"paths": []} },
+	{ "caption": "Paste", "command": "my_sidebar_paste", "args": {"paths": []} },
 	{ "caption": "-", "id": "my_sidebar_clipboard" },
 	{ "caption": "Duplicate", "command": "my_sidebar_duplicate", "args": {"paths": []} },
 	{ "caption": "Move To", "command": "my_sidebar_move", "args": {"paths": []} },

@@ -1,5 +1,7 @@
+_dev/
 _res/
 tmp/
 t.sh
-tests/
-src/tmp/
+__pycache__/
+*.pyc
+.DS_Store

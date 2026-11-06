@@ -73,7 +73,7 @@ def _marker_path():
 
 
 def _pkg_root():
-    return os.path.join(sublime.packages_path(), "MySideBar")
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _backup_dir():

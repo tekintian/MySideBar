@@ -105,25 +105,58 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 
 ## 安装
 
-### 通过 Package Control（GitHub 仓库方式）
+> **注意**：本仓库根目录即插件根目录，`MySideBar.py` 等插件入口文件直接位于根层。仓库另有一个 `_dev/` 目录用于存放测试脚本与开发文档，该目录已被 `.gitignore` 排除，不会出现在发布版本中。
 
-1. `Preferences` → `Package Control` → `Add Repository`，填入本仓库地址
-2. `Package Control` → `Install Package`，搜索 `MySideBar`
+推荐的安装方式是 Package Control（`Add Repository` + `Install Package`），或使用下述手动方式。
 
-### 手动安装
+### 方式一：Package Control 安装
 
-将整个插件目录放入 Sublime Text 的 `Packages` 目录：
+1. `Ctrl+Shift+P` → `Package Control: Add Repository`，填入本仓库地址
+2. `Ctrl+Shift+P` → `Package Control: Install Package`，搜索并选择 `MySideBar`
+
+### 方式二：手动安装
+
+把仓库根目录的插件文件复制到 `Packages/` 下，并**重命名为 `MySideBar`**（`_dev/`、`_res/`、`tmp/` 不需要复制）：
+
+```bash
+# macOS / Linux 示例，路径按实际情况调整
+rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
+  ./ "<Packages>/MySideBar"
+```
+
+安装后的目录结构必须是：
 
 ```
 <Packages>/MySideBar/
-├── MySideBar.py
+├── MySideBar.py                  ← 必须在 MySideBar/ 根层
 ├── MySideBar.sublime-settings
+├── Commands.sublime-commands
 ├── Side Bar.sublime-menu
-├── ...
+├── Tab Context.sublime-menu
+├── Tab Sidebar Context.sublime-menu
+├── Main.sublime-menu
+├── Default.sublime-keymap
+├── meta.py
 └── mysidebar/
+    ├── api.py
+    ├── i18n.py
+    ├── cmds/
+    └── ...
 ```
 
+判断是否装对的标准：`<Packages>/MySideBar/MySideBar.py` 必须直接存在。如果变成了 `<Packages>/MySideBar/src/MySideBar.py`，则装错了层级，插件不会加载。
+
 `Packages` 目录位置可通过 `Preferences` → `Browse Packages...` 查看。
+
+### 方式三：开发方式（软链接到当前仓库）
+
+适合需要跟随本仓库持续更新代码的场景，把仓库根目录软链为插件目录：
+
+```bash
+ln -s "/path/to/MySideBar" "<Packages>/MySideBar"
+```
+
+修改代码后，在 Sublime Text 中执行 `Ctrl+Shift+P` → `Sublime Text: Reload Plugin Host`（或直接在控制台执行 `sublime_plugin.reload_plugin("MySideBar.MySideBar")`）即可生效。
 
 安装后重启 Sublime Text；首次运行会自动弹出语言选择面板。
 
@@ -193,18 +226,20 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 
 ## 文档
 
+开发文档位于 `_dev/docs/`（不随发布版本分发）：
+
 | 文档 | 内容 |
 |---|---|
-| [实现说明](./docs/MySideBar-04-实现说明-v1.0.md) | 按代码实际实现编写的架构、命令、配置、数据目录说明 |
-| [技术方案](./docs/MySideBar-01-技术方案-v2.0.md) | 设计取舍与 ST4 原生能力实测结论 |
-| [任务计划](./docs/MySideBar-02-任务计划-v2.0.md) | 分阶段实施计划 |
-| [多语言编码兼容方案](./docs/MySideBar-03-多语言编码兼容方案-v1.2.md) | 编码探测与转换的专项设计 |
+| `_dev/docs/MySideBar-04-实现说明-v1.0.md` | 按代码实际实现编写的架构、命令、配置、数据目录说明 |
+| `_dev/docs/MySideBar-01-技术方案-v2.0.md` | 设计取舍与 ST4 原生能力实测结论 |
+| `_dev/docs/MySideBar-02-任务计划-v2.0.md` | 分阶段实施计划 |
+| `_dev/docs/MySideBar-03-多语言编码兼容方案-v1.2.md` | 编码探测与转换的专项设计 |
 
 ---
 
 ## 开发
 
-插件由 `src/` 下的文件构成，直接部署到 `Packages/MySideBar/` 即可运行。新增命令的方式：
+插件由仓库根目录的 `MySideBar.py` 与 `mysidebar/` 包构成，直接部署到 `Packages/MySideBar/` 即可运行。新增命令的方式：
 
 1. 在 `mysidebar/cmds/` 下新建模块
 2. 定义 `MySidebarXxxCommand(sublime_plugin.WindowCommand)` 等命令类
@@ -212,14 +247,29 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 
 包根入口会递归发现所有命令类并自动注册，无需修改 `MySideBar.py`。命令名规则由 ST 自动转换：类名去掉 `Command` 后缀后转为下划线命名。
 
-校验脚本位于 `tests/`（`_` 前缀文件不会被 ST 加载），在项目根目录执行：
+校验脚本位于 `_dev/tests/`（`_` 前缀文件不会被 ST 加载），在项目根目录执行：
 
 ```bash
-python3 tests/_check.py
-python3 tests/_menu_roundtrip.py
-python3 tests/_i18n_keys.py
-python3 tests/_entry_export.py
+python3 _dev/tests/_check.py
+python3 _dev/tests/_menu_roundtrip.py
+python3 _dev/tests/_i18n_keys.py
+python3 _dev/tests/_entry_export.py
 ```
+
+### 发布
+
+版本号以 `meta.py` 的 `__version__` 为唯一来源。Package Control 只按**语义化版本 tag** 分发（分支发布已被官方废弃），因此每次发版必须同时更新版本号并打同名 tag，tag 名不带 `v` 前缀：
+
+```bash
+# 1. 更新 meta.py 的 __version__
+# 2. 提交后打 tag 并推送
+git tag 1.0.0
+git push origin main --tags
+```
+
+Package Control 的渠道提交配置见 `_dev/package-control-submission.json`（该文件仅作留档，不会被插件分发给用户）。其中 `sublime_text` 声明为 `>=4000`，因为插件入口直接导入了 ST4 才有的 `ApplicationCommand` 与 `ViewEventListener`，在 ST3 下会导入失败。若将来仓库地址变更，`details` 字段与 `meta.py` 的 `__url__` 必须同步修改。
+
+首次安装提示由根目录的 `messages.json` 驱动：键 `install` 对应新用户，键为版本号（如 `1.1.0`）时对应从低版本升级的用户。新增升级提示时，在 `messages/` 下新建 txt 并在 `messages.json` 里按版本号登记，Package Control 只会展示高于用户原有版本的提示。
 
 ---
 
