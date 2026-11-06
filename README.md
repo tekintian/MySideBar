@@ -106,23 +106,29 @@ The read-only list view produced by `List Files` supports:
 
 ## Installation
 
-> **Note**: the repository root *is* the plugin root — entry files such as `MySideBar.py` sit directly at the top level. The repo also has a `_dev/` directory holding test scripts and development docs; it is excluded by `.gitignore` and never appears in the released version.
+> **Note**: the plugin package root is the `src/` directory — entry files such as `MySideBar.py` sit directly at the `src/` top level. The repo root also holds `packages.json` (the Package Control manifest), `tools/` (build and release scripts), `tests/` (validation scripts) and `docs/`; none of these are part of the running plugin.
 
 The recommended install method is Package Control (`Add Repository` + `Install Package`), or use one of the manual methods below.
 
 ### Option 1: Install via Package Control
 
-1. `Ctrl+Shift+P` → `Package Control: Add Repository`, then enter this repository's URL
+1. `Ctrl+Shift+P` → `Package Control: Add Repository`, then enter the manifest URL below (the `packages.json` file, not the repository URL)
 2. `Ctrl+Shift+P` → `Package Control: Install Package`, search for and select `MySideBar`
+
+```
+https://raw.githubusercontent.com/tekintian/MySideBar/main/packages.json
+```
+
+Each published version points at the Release archive for that tag; the archive root *is* the plugin root, so no nesting level is introduced.
 
 ### Option 2: Manual installation
 
-Copy the plugin files from the repository root into `Packages/` and **rename the folder to `MySideBar`** (`_dev/`, `_res/` and `tmp/` do not need to be copied):
+Copy the contents of `src/` into `Packages/MySideBar/` (`tests/`, `docs/` and `tools/` are not needed):
 
 ```bash
 # macOS / Linux example — adjust the paths to your actual setup
-rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
-  ./ "<Packages>/MySideBar"
+rsync -av --exclude=__pycache__ \
+  src/ "<Packages>/MySideBar"
 ```
 
 After installation the directory structure must be:
@@ -138,6 +144,11 @@ After installation the directory structure must be:
 ├── Main.sublime-menu
 ├── Default.sublime-keymap
 ├── meta.py
+├── messages.json
+├── .no-sublime-package           ← required, otherwise the menu overlay mechanism breaks
+├── .python-version               ← must contain 3.8
+├── messages/
+│   └── install.txt
 └── mysidebar/
     ├── api.py
     ├── i18n.py
@@ -149,12 +160,12 @@ The test for a correct install: `<Packages>/MySideBar/MySideBar.py` must exist d
 
 You can locate the `Packages` directory via `Preferences` → `Browse Packages...`.
 
-### Option 3: Development setup (symlink to this repo)
+### Option 3: Development setup (symlink to `src/`)
 
-Ideal when you want to keep up with code changes in this repository — symlink the repository root as the plugin directory:
+Ideal when you want to keep up with code changes in this repository — symlink `src/` as the plugin directory:
 
 ```bash
-ln -s "/path/to/MySideBar" "<Packages>/MySideBar"
+ln -s "/path/to/MySideBar/src" "<Packages>/MySideBar"
 ```
 
 After modifying code, run `Ctrl+Shift+P` → `Sublime Text: Reload Plugin Host` in Sublime Text (or execute `sublime_plugin.reload_plugin("MySideBar.MySideBar")` directly in the console) for the changes to take effect.

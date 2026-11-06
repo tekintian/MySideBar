@@ -4,7 +4,7 @@ import sys
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.dirname(os.path.dirname(HERE))
+SRC = os.path.join(os.path.dirname(HERE), "src")
 
 
 def load_module(path, name, pkg_path=None):

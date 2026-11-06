@@ -1,0 +1,87 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build archive
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          grep -q "__version__ = '${VERSION}'" src/meta.py \
+            || { echo "src/meta.py __version__ != tag ${VERSION}"; exit 1; }
+          head -n 1 src/messages/install.txt | grep -q "MySideBar ${VERSION}" \
+            || { echo "src/messages/install.txt != tag ${VERSION}"; exit 1; }
+          test "$(cat src/.python-version)" = "3.8"
+          mkdir -p dist
+          (cd src && zip -qr "../dist/MySideBar-${VERSION}.zip" . -x "*.DS_Store" "*/__pycache__/*")
+          unzip -l "dist/MySideBar-${VERSION}.zip"
+          test ! -e "dist/MySideBar-${VERSION}.zip.src" || { echo "archive is nested under src/"; exit 1; }
+          (cd dist && sha256sum "MySideBar-${VERSION}.zip" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Update packages.json
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          SHA=$(cut -d' ' -f1 dist/SHA256SUMS.txt)
+          DATE=$(date -u '+%Y-%m-%d %H:%M:%S')
+          python3 - "$VERSION" "$SHA" "$DATE" <<'PY'
+          import json
+          import os
+          import sys
+
+          version, digest, date = sys.argv[1:4]
+          url = "https://github.com/%s/releases/download/%s/MySideBar-%s.zip" % (
+              os.environ["GITHUB_REPOSITORY"],
+              version,
+              version,
+          )
+          payload = {
+              "schema_version": "4.0.0",
+              "packages": [
+                  {
+                      "name": "MySideBar",
+                      "details": "https://github.com/%s" % os.environ["GITHUB_REPOSITORY"],
+                      "labels": ["sidebar", "encoding", "file management", "i18n"],
+                      "releases": [
+                          {
+                              "sublime_text": ">=4000",
+                              "platforms": ["*"],
+                              "version": version,
+                              "url": url,
+                              "date": date,
+                              "sha256": digest,
+                          }
+                      ],
+                  }
+              ],
+              "libraries": [],
+          }
+          with open("packages.json", "w", encoding="utf-8") as fp:
+              json.dump(payload, fp, indent=4)
+              fp.write("\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages.json
+          git commit -m "release: ${VERSION}"
+          git push origin HEAD:main
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MySideBar-*.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true

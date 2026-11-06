@@ -5,7 +5,7 @@ import sys
 import tempfile
 import types
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
 TARGETS = (
     "Side Bar.sublime-menu",
     "Tab Context.sublime-menu",

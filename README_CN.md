@@ -107,23 +107,29 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 
 ## 安装
 
-> **注意**：本仓库根目录即插件根目录，`MySideBar.py` 等插件入口文件直接位于根层。仓库另有一个 `_dev/` 目录用于存放测试脚本与开发文档，该目录已被 `.gitignore` 排除，不会出现在发布版本中。
+> **注意**：插件包根是仓库的 `src/` 目录，`MySideBar.py` 等入口文件直接位于 `src/` 根层。仓库根另有 `packages.json`（Package Control 清单）、`tools/`（打包与发版脚本）、`tests/`（校验脚本）与 `docs/`（开发文档），这些都不属于插件运行时文件。
 
 推荐的安装方式是 Package Control（`Add Repository` + `Install Package`），或使用下述手动方式。
 
 ### 方式一：Package Control 安装
 
-1. `Ctrl+Shift+P` → `Package Control: Add Repository`，填入本仓库地址
+1. `Ctrl+Shift+P` → `Package Control: Add Repository`，填入下面的清单地址（注意是 `packages.json`，不是仓库地址）
 2. `Ctrl+Shift+P` → `Package Control: Install Package`，搜索并选择 `MySideBar`
+
+```
+https://raw.githubusercontent.com/tekintian/MySideBar/main/packages.json
+```
+
+Package Control 订阅的版本固定指向该 tag 的 Release 压缩包，压缩包顶层就是插件根，不会产生嵌套层级。
 
 ### 方式二：手动安装
 
-把仓库根目录的插件文件复制到 `Packages/` 下，并**重命名为 `MySideBar`**（`_dev/`、`_res/`、`tmp/` 不需要复制）：
+把 `src/` 目录下的内容复制到 `Packages/MySideBar/`（`tests/`、`docs/`、`tools/` 不需要复制）：
 
 ```bash
 # macOS / Linux 示例，路径按实际情况调整
-rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
-  ./ "<Packages>/MySideBar"
+rsync -av --exclude=__pycache__ \
+  src/ "<Packages>/MySideBar"
 ```
 
 安装后的目录结构必须是：
@@ -139,6 +145,11 @@ rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
 ├── Main.sublime-menu
 ├── Default.sublime-keymap
 ├── meta.py
+├── messages.json
+├── .no-sublime-package           ← 必须存在，否则菜单翻译的覆盖层机制失效
+├── .python-version               ← 内容必须是 3.8
+├── messages/
+│   └── install.txt
 └── mysidebar/
     ├── api.py
     ├── i18n.py
@@ -150,12 +161,12 @@ rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
 
 `Packages` 目录位置可通过 `Preferences` → `Browse Packages...` 查看。
 
-### 方式三：开发方式（软链接到当前仓库）
+### 方式三：开发方式（软链接到 `src/`）
 
-适合需要跟随本仓库持续更新代码的场景，把仓库根目录软链为插件目录：
+适合需要跟随本仓库持续更新代码的场景，把 `src/` 软链为插件目录：
 
 ```bash
-ln -s "/path/to/MySideBar" "<Packages>/MySideBar"
+ln -s "/path/to/MySideBar/src" "<Packages>/MySideBar"
 ```
 
 修改代码后，在 Sublime Text 中执行 `Ctrl+Shift+P` → `Sublime Text: Reload Plugin Host`（或直接在控制台执行 `sublime_plugin.reload_plugin("MySideBar.MySideBar")`）即可生效。

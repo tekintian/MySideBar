@@ -6,8 +6,8 @@ import sys
 import tempfile
 import types
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.chdir(ROOT)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+os.chdir(os.path.normpath(os.path.join(ROOT, "..", "src")))
 
 
 class PatchedOS(object):

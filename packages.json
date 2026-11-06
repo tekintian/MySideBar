@@ -14,7 +14,10 @@
                 {
                     "sublime_text": ">=4000",
                     "platforms": ["*"],
-                    "tags": true
+                    "version": "1.0.0",
+                    "url": "https://github.com/tekintian/MySideBar/releases/download/1.0.0/MySideBar-1.0.0.zip",
+                    "date": "2026-11-06 00:00:00",
+                    "sha256": ""
                 }
             ]
         }

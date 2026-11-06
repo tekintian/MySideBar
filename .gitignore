@@ -1,5 +1,6 @@
 _res/
 tmp/
+dist/
 t.sh
 __pycache__/
 *.pyc

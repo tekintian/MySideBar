@@ -2,7 +2,7 @@ import os
 import sys
 import types
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
 
 sublime = types.ModuleType("sublime")
 sublime.version = lambda: "4173"
