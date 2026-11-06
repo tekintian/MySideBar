@@ -1,0 +1,8 @@
+===== encoding detect =====
+DETECT_FAILURES 0
+===== i18n keys =====
+I18N_FAILURES 0
+===== menus and structure =====
+failures 0
+===== SUMMARY =====
+ALL TESTS PASSED

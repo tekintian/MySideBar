@@ -2,8 +2,8 @@
 
 本文档按**当前代码的实际实现**编写，用于说明插件由哪些文件构成、每个命令的真实行为、配置项语义、运行时产生的数据位置，以及本地校验方式。
 
-- 方案与需求取舍见：[MySideBar-01-技术方案-v2.0.md](./MySideBar-01-技术方案-v2.0.md)
-- 编码相关设计见：[MySideBar-03-多语言编码兼容方案-v1.2.md](./MySideBar-03-多语言编码兼容方案-v1.2.md)
+- 方案与需求取舍见：[01-technical-design.md](./01-technical-design.md)
+- 编码相关设计见：[03-encoding-strategy.md](./03-encoding-strategy.md)
 
 ---
 

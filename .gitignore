@@ -4,4 +4,3 @@ t.sh
 __pycache__/
 *.pyc
 .DS_Store
-check_out.txt

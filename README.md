@@ -1,134 +1,135 @@
 # MySideBar
 
-Sublime Text 4 侧边栏增强插件。
+A sidebar enhancement plugin for Sublime Text 4.
 
-在侧边栏右键菜单、标签右键菜单中补齐 ST 原生缺失的文件操作能力：中文编码自动识别与乱码修复、跨平台回收站删除、会话内剪切/复制/粘贴、批量编码转换、递归文件列表等。
+It fills in the file-operation capabilities that ST lacks natively, available from the sidebar context menu and the tab context menu: automatic Chinese encoding detection and mojibake repair, cross-platform trash deletion, in-session cut/copy/paste, batch encoding conversion, recursive file listing, and more.
 
----
-
-## 亮点
-
-### 1. 中文乱码自动修复，打开即正确显示
-
-GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。本插件在文件加载时自动识别真实编码并静默重开，**无需手动逐个切换编码**。
-
-难点在于中文编码极易互判——同一段字节用 GB18030 和 Big5 解码都能"成功"，但只有一个是对的。插件的做法：
-
-- **只做单候选判定**：`locale` 决定唯一候选编码（`zh_CN`→GB18030、`zh_TW`→Big5、`ja_JP`→Shift JIS）。存在多个候选时直接放弃，从机制上杜绝误判，而不是靠"分数高低"去猜。
-- **可信度校验**：解码结果还要过三道关卡才不会误判——PUA（私用区）字符占比必须低于 2%，Shift JIS 的半角片假名占比必须低于 30%（用于识破错误解码产生的大片半角片假名），并校验脚本族是否与编码匹配。
-- **先判二进制与纯 ASCII**：二进制文件不误判，纯 ASCII 文件直接跳过，不做无意义的编码折腾。
-- **重开结果二次验证**：不是发起重开就完事，而是延迟轮询校验（120ms 间隔、最多 30 次），确认编码真的切换成功；失败会明确放弃并记录日志，不会留下半处理状态。
-
-### 2. 不产生 dump 废文件，不污染包目录，升级不丢配置
-
-很多插件做菜单本地化时会改写包内文件或到处落地临时文件，结果留下 `xxx.bak`、`xxx.orig` 这类垃圾，或者被 `Package Control` 升级覆盖后文案错乱。本插件在这点上做了严格约束：
-
-- **包内文件永不改写**：`Side Bar.sublime-menu` 等文件始终是英文原文，插件升级覆盖包内容不会损坏任何东西。
-- **译文只落在 ST 官方覆盖层**：译文写入 `<Packages>/User/MySideBar/`，这是 ST 自身支持的机制，不额外产生文件。
-- **切换即清理，不留残渣**：切回英文时直接删除覆盖层文件，包内英文原文自动生效；插件卸载时同步清理覆盖层与标记文件。
-- **唯一持久产物是有意义的备份**：只有 `<Packages>/tmp/menu_backup/` 一个目录，用于在小语种之间来回切换时复用原文，且写入前先做幂等性校验，源文件被改动过就拒绝备份，避免脏数据污染后续所有切换。
-
-### 3. 三个平台都进系统回收站，且零第三方依赖
-
-删除文件不该是不可逆的。插件不使用 `os.remove`，而是真正调用系统的回收站能力，并且**不依赖任何第三方包**：
-
-| 平台 | 实现方式 |
-|---|---|
-| macOS | 通过 `ctypes` 直接调用 Objective-C 运行时与 `NSFileManager`，无需安装 PyObjC |
-| Windows | 调用 `SHFileOperationW`（`FOF_ALLOWUNDO`），文件进回收站而非直接消失 |
-| Linux | 调用 `gio trash` |
-
-能力不可用时（如 Linux 未装 `gio`、某些环境无 objc 运行时）会给出明确失败原因，而不是静默失败或降级成永久删除。
-
-### 4. 批量操作不卡界面，也不会冲掉你的未保存修改
-
-- **列表视图的批量操作**：递归遍历在异步线程执行，分批写入视图，不阻塞界面；大目录有结果条数上限保护（默认 5000 条，可配置），达到上限时停止遍历并明确提示已截断。
-- **批量编码转换串行执行**：逐个文件处理，不会一次性打开几十个文件把编辑器拖死。
-- **脏文件直接跳过**：已打开且**有未保存修改**的文件不会被编码转换覆盖，宁可跳过也不吞掉你的改动。
-- **大文件保护**：超过 `encoding_max_bytes`（默认 20MB）的文件自动跳过并记录原因。
-- **结果可追溯**：每个文件成功/跳过/失败及原因汇总到结果面板，不成功也让你知道为什么。
-
-### 5. 界面语言即时切换，无需重启
-
-`English` / `简体中文` / `繁體中文` 三语，切换后菜单立刻更新，不需要重启 Sublime Text，也不需要重新安装。文案表 key 三语完全对齐（各 111 项），缺 key 时逐级回退英文原文，不会显示空白或 `key` 字面量。
-
-### 6. 纯 Python · 零依赖 · 三平台一致
-
-只使用 ST4 内置 Python 运行时与标准库，没有外部依赖，不需要 pip 安装任何东西，macOS / Windows / Linux 行为一致。
+English | [简体中文](./README_CN.md)
 
 ---
 
-## 功能
+## Highlights
 
+### 1. Automatic mojibake repair — files open correctly the first time
 
-### 侧边栏右键菜单
+Chinese files encoded in GB18030 / Big5 often appear as garbled boxes when opened in ST. This plugin detects the real encoding when a file loads and silently reopens it, so **you never have to switch encodings file by file**.
 
-| 菜单项 | 说明 |
+The hard part is that Chinese encodings are extremely easy to confuse with each other — the same byte sequence can "successfully" decode under both GB18030 and Big5, yet only one is correct. The plugin's approach:
+
+- **Single-candidate detection only**: `locale` determines the one and only candidate encoding (`zh_CN`→GB18030, `zh_TW`→Big5, `ja_JP`→Shift JIS). When multiple candidates exist it simply gives up, eliminating misdetection by design instead of guessing by "confidence score".
+- **Credibility validation**: the decoded result must still pass three gates — the PUA (Private Use Area) character ratio must stay below 2%, the half-width katakana ratio for Shift JIS must stay below 30% (this catches the large runs of half-width katakana produced by wrong decoding), and the script family must match the encoding.
+- **Binary and pure-ASCII checked first**: binary files are never misdetected, and pure-ASCII files are skipped outright — no pointless encoding fiddling.
+- **Reopen result verified twice**: it does not just fire a reopen and walk away. It polls with a delay (120 ms interval, up to 30 attempts) to confirm the encoding really switched; on failure it explicitly gives up and logs it, never leaving a half-processed state.
+
+### 2. No dump files, no package pollution, no lost settings on upgrade
+
+Many plugins rewrite files inside their own package or drop temporary files all over the place when localizing menus — leaving junk like `xxx.bak`, `xxx.orig`, or having their strings corrupted after a `Package Control` upgrade overwrites the package. This plugin is strict about this:
+
+- **Package files are never rewritten**: files such as `Side Bar.sublime-menu` always stay in plain English, so a plugin upgrade overwriting the package can never break anything.
+- **Translations land only in ST's official override layer**: translations are written to `<Packages>/User/MySideBar/`, a mechanism ST itself supports — no extra files are created.
+- **Switching cleans up — no residue**: switching back to English deletes the override files directly, so the English originals inside the package take effect again; uninstalling the plugin cleans up both the overrides and the marker files.
+- **The only persistent artifact is a meaningful backup**: just one directory, `<Packages>/tmp/menu_backup/`, used to reuse the originals when toggling between minor languages. An idempotency check runs before writing — if the source file has changed, the backup is refused, preventing dirty data from poisoning every later switch.
+
+### 3. Real system trash on all three platforms, with zero third-party dependencies
+
+Deleting a file should not be irreversible. The plugin never uses `os.remove`; it actually invokes the system's trash capability, and it **depends on no third-party package**:
+
+| Platform | Implementation |
 |---|---|
-| Open In New Window | 在 Sublime Text 新窗口中打开选中的文件/目录 |
-| Open With Default Application | 用系统默认程序打开 |
-| Cut / Copy / Paste | 会话内剪切、复制、粘贴（可跨目录粘贴整个目录树） |
-| Copy Relative Path | 复制相对于项目根目录的路径 |
-| Copy File Name | 复制文件名 |
-| Duplicate | 创建副本（自动避免重名） |
-| Move To | 移动到指定目录 |
-| Move To Trash | 移入系统回收站（非永久删除） |
-| List Files | 递归列出目录下所有文件到只读视图 |
-| Convert Encoding | 批量转换文件编码 |
+| macOS | Calls the Objective-C runtime and `NSFileManager` directly via `ctypes` — no PyObjC needed |
+| Windows | Calls `SHFileOperationW` (`FOF_ALLOWUNDO`), so files go to the Recycle Bin instead of vanishing |
+| Linux | Calls `gio trash` |
 
-### 标签右键菜单
+When the capability is unavailable (e.g. `gio` not installed on Linux, or no objc runtime in some environments), it reports a clear failure reason instead of failing silently or degrading to a permanent delete.
 
-| 菜单项 | 说明 |
-|---|---|
-| Reveal In File Manager | 在文件管理器中定位该文件 |
-| Copy Path | 复制该标签的完整路径 |
-| Convert Encoding | 转换当前标签文件编码 |
+### 4. Batch operations don't freeze the UI, and don't wipe out your unsaved changes
 
-### 文件列表视图
+- **Batch operations in the list view**: the recursive walk runs on an async thread and writes to the view in batches, so the UI never blocks. Large directories are protected by a result-count cap (default 5000, configurable); on reaching the cap, traversal stops and a truncation notice is shown.
+- **Batch encoding conversion runs serially**: files are processed one at a time, so it never opens dozens of files at once and chokes the editor.
+- **Dirty files are skipped outright**: a file that is open with **unsaved modifications** is never overwritten by encoding conversion — better to skip than to swallow your edits.
+- **Large-file protection**: files over `encoding_max_bytes` (default 20 MB) are skipped automatically with the reason recorded.
+- **Traceable results**: every file's success/skip/failure plus the reason is summarized in a result panel — even when it doesn't work, you know why.
 
-`List Files` 生成的只读列表视图支持：
+### 5. Instant UI language switching, no restart required
 
-- 选中行后按 `Enter` 打开对应文件
-- 命令面板执行 `MySideBar: Copy Listed Paths` 批量复制路径
-- 命令面板执行 `MySideBar: Move Listed To Trash` 批量移入回收站
-- 支持排除目录/文件、结果条数上限、相对路径展示格式
+Three languages: `English` / `简体中文` / `繁體中文`. The menus update immediately after switching — no Sublime Text restart and no reinstall needed. The string tables are fully aligned across all three languages (111 keys each); on a missing key it falls back level by level to the English original, so you never see blanks or literal `key` names.
 
-### 编码处理
+### 6. Pure Python · zero dependencies · consistent across three platforms
 
-- 支持 UTF-8、UTF-16 LE/BE、GB18030、Big5、Shift JIS、EUC-KR、Windows 1252
-- 打开文件时自动识别编码并静默修正乱码（可关闭）
-- 自动识别仅在单候选编码时生效，避免 GB18030 与 Big5 互相误判
-- 批量转换异步串行执行，不阻塞界面；已打开且有未保存修改的文件会被跳过
-- 提供 `Encoding Doctor` 编码诊断报告，用于排查乱码问题
+It uses only the Python runtime built into ST4 and its standard library. No external dependencies, no pip installs, and identical behavior on macOS / Windows / Linux.
 
 ---
 
-## 安装
+## Features
 
-> **注意**：本仓库根目录即插件根目录，`MySideBar.py` 等插件入口文件直接位于根层。仓库另有一个 `_dev/` 目录用于存放测试脚本与开发文档，该目录已被 `.gitignore` 排除，不会出现在发布版本中。
+### Sidebar context menu
 
-推荐的安装方式是 Package Control（`Add Repository` + `Install Package`），或使用下述手动方式。
+| Menu item | Description |
+|---|---|
+| Open In New Window | Open the selected file/directory in a new Sublime Text window |
+| Open With Default Application | Open with the system default application |
+| Cut / Copy / Paste | In-session cut, copy, paste (pastes entire directory trees across directories) |
+| Copy Relative Path | Copy the path relative to the project root |
+| Copy File Name | Copy the file name |
+| Duplicate | Create a duplicate (automatically avoiding name collisions) |
+| Move To | Move to a specified directory |
+| Move To Trash | Move to the system trash (not a permanent delete) |
+| List Files | Recursively list all files under a directory into a read-only view |
+| Convert Encoding | Batch convert file encodings |
 
-### 方式一：Package Control 安装
+### Tab context menu
 
-1. `Ctrl+Shift+P` → `Package Control: Add Repository`，填入本仓库地址
-2. `Ctrl+Shift+P` → `Package Control: Install Package`，搜索并选择 `MySideBar`
+| Menu item | Description |
+|---|---|
+| Reveal In File Manager | Reveal the file in the file manager |
+| Copy Path | Copy the full path of the tab |
+| Convert Encoding | Convert the encoding of the current tab's file |
 
-### 方式二：手动安装
+### File list view
 
-把仓库根目录的插件文件复制到 `Packages/` 下，并**重命名为 `MySideBar`**（`_dev/`、`_res/`、`tmp/` 不需要复制）：
+The read-only list view produced by `List Files` supports:
+
+- Selecting a row and pressing `Enter` to open the corresponding file
+- Running `MySideBar: Copy Listed Paths` from the command palette to copy paths in bulk
+- Running `MySideBar: Move Listed To Trash` from the command palette to trash items in bulk
+- Excluding directories/files, a result-count cap, and relative-path display format
+
+### Encoding handling
+
+- Supports UTF-8, UTF-16 LE/BE, GB18030, Big5, Shift JIS, EUC-KR, Windows 1252
+- Detects and silently fixes mojibake when a file is opened (can be disabled)
+- Auto-detection only applies when there is a single candidate encoding, preventing GB18030 and Big5 from misjudging each other
+- Batch conversion runs asynchronously and serially without blocking the UI; open files with unsaved modifications are skipped
+- Provides an `Encoding Doctor` diagnostic report for troubleshooting mojibake
+
+---
+
+## Installation
+
+> **Note**: the repository root *is* the plugin root — entry files such as `MySideBar.py` sit directly at the top level. The repo also has a `_dev/` directory holding test scripts and development docs; it is excluded by `.gitignore` and never appears in the released version.
+
+The recommended install method is Package Control (`Add Repository` + `Install Package`), or use one of the manual methods below.
+
+### Option 1: Install via Package Control
+
+1. `Ctrl+Shift+P` → `Package Control: Add Repository`, then enter this repository's URL
+2. `Ctrl+Shift+P` → `Package Control: Install Package`, search for and select `MySideBar`
+
+### Option 2: Manual installation
+
+Copy the plugin files from the repository root into `Packages/` and **rename the folder to `MySideBar`** (`_dev/`, `_res/` and `tmp/` do not need to be copied):
 
 ```bash
-# macOS / Linux 示例，路径按实际情况调整
+# macOS / Linux example — adjust the paths to your actual setup
 rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
   ./ "<Packages>/MySideBar"
 ```
 
-安装后的目录结构必须是：
+After installation the directory structure must be:
 
 ```
 <Packages>/MySideBar/
-├── MySideBar.py                  ← 必须在 MySideBar/ 根层
+├── MySideBar.py                  ← must be at the MySideBar/ top level
 ├── MySideBar.sublime-settings
 ├── Commands.sublime-commands
 ├── Side Bar.sublime-menu
@@ -144,86 +145,86 @@ rsync -av --exclude=_dev --exclude=_res --exclude=tmp --exclude=t.sh \
     └── ...
 ```
 
-判断是否装对的标准：`<Packages>/MySideBar/MySideBar.py` 必须直接存在。如果变成了 `<Packages>/MySideBar/src/MySideBar.py`，则装错了层级，插件不会加载。
+The test for a correct install: `<Packages>/MySideBar/MySideBar.py` must exist directly. If it ends up as `<Packages>/MySideBar/src/MySideBar.py`, the nesting level is wrong and the plugin will not load.
 
-`Packages` 目录位置可通过 `Preferences` → `Browse Packages...` 查看。
+You can locate the `Packages` directory via `Preferences` → `Browse Packages...`.
 
-### 方式三：开发方式（软链接到当前仓库）
+### Option 3: Development setup (symlink to this repo)
 
-适合需要跟随本仓库持续更新代码的场景，把仓库根目录软链为插件目录：
+Ideal when you want to keep up with code changes in this repository — symlink the repository root as the plugin directory:
 
 ```bash
 ln -s "/path/to/MySideBar" "<Packages>/MySideBar"
 ```
 
-修改代码后，在 Sublime Text 中执行 `Ctrl+Shift+P` → `Sublime Text: Reload Plugin Host`（或直接在控制台执行 `sublime_plugin.reload_plugin("MySideBar.MySideBar")`）即可生效。
+After modifying code, run `Ctrl+Shift+P` → `Sublime Text: Reload Plugin Host` in Sublime Text (or execute `sublime_plugin.reload_plugin("MySideBar.MySideBar")` directly in the console) for the changes to take effect.
 
-安装后重启 Sublime Text；首次运行会自动弹出语言选择面板。
+Restart Sublime Text after installation; on first run a language selection panel appears automatically.
 
 ---
 
-## 使用
+## Usage
 
-### 语言切换
+### Switching language
 
-三种方式，效果一致且立即生效：
+Three ways, all equivalent and effective immediately:
 
-1. `Preferences` → `Settings` 中将 `ui_language` 设为 `en` / `zh_CN` / `zh_TW`
-2. `Preferences` → `Package Settings` → `MySideBar` → `Language` 子菜单
-3. 命令面板执行 `MySideBar: UI Language - ...`
+1. `Preferences` → `Settings`, set `ui_language` to `en` / `zh_CN` / `zh_TW`
+2. `Preferences` → `Package Settings` → `MySideBar` → `Language` submenu
+3. Run `MySideBar: UI Language - ...` from the command palette
 
-菜单未及时更新时，可执行 `Preferences` → `Package Settings` → `MySideBar` → `Reapply Menus` 强制重新应用。
+If the menus don't update in time, run `Preferences` → `Package Settings` → `MySideBar` → `Reapply Menus` to force a reapply.
 
-### 配置
+### Configuration
 
-通过 `Preferences` → `Package Settings` → `MySideBar` → `Settings` 打开用户配置：
+Open the user configuration via `Preferences` → `Package Settings` → `MySideBar` → `Settings`:
 
-| 配置项 | 默认值 | 说明 |
+| Setting | Default | Description |
 |---|---|---|
-| `ui_language` | `null` | 界面语言，`null` 表示未选择（首次运行弹窗） |
-| `encoding_max_bytes` | `20971520` | 参与批量编码转换的单文件大小上限（字节） |
-| `auto_detect_encoding` | `true` | 打开文件时是否自动检测编码 |
-| `encoding_auto_locales` | `"zh_CN"` | 自动检测使用的 locale，决定唯一候选编码：`zh_CN`→GB18030，`zh_TW`→Big5，`ja_JP`→Shift JIS |
-| `encoding_status_bar` | `true` | 是否在状态栏提示编码处理结果 |
-| `list_files_result_limit` | `5000` | 文件列表最大行数，超出截断 |
-| `list_files_exclude_dirs` | `[".git", "node_modules", "vendor", "dist", "build"]` | 列表时跳过的目录名 |
-| `list_files_exclude_files` | `[".DS_Store", "Thumbs.db", "desktop.ini", "._*"]` | 列表时跳过的文件名，支持前缀通配 |
-| `list_files_result_format` | `"relative"` | 列表展示格式，`relative` 显示相对项目根目录的路径 |
-| `confirm_before_trash` | `true` | 移入回收站前是否确认 |
+| `ui_language` | `null` | UI language; `null` means not chosen yet (prompted on first run) |
+| `encoding_max_bytes` | `20971520` | Per-file size limit (bytes) for participating in batch encoding conversion |
+| `auto_detect_encoding` | `true` | Whether to auto-detect the encoding when a file is opened |
+| `encoding_auto_locales` | `"zh_CN"` | Locale used for auto-detection, which determines the single candidate encoding: `zh_CN`→GB18030, `zh_TW`→Big5, `ja_JP`→Shift JIS |
+| `encoding_status_bar` | `true` | Whether to show encoding processing results in the status bar |
+| `list_files_result_limit` | `5000` | Maximum lines in the file list; anything beyond is truncated |
+| `list_files_exclude_dirs` | `[".git", "node_modules", "vendor", "dist", "build"]` | Directory names to skip when listing |
+| `list_files_exclude_files` | `[".DS_Store", "Thumbs.db", "desktop.ini", "._*"]` | File names to skip when listing; prefix wildcards supported |
+| `list_files_result_format` | `"relative"` | List display format; `relative` shows paths relative to the project root |
+| `confirm_before_trash` | `true` | Whether to confirm before moving to the trash |
 
-### 命令面板
+### Command palette
 
-| 命令 | 说明 |
+| Command | Description |
 |---|---|
-| `MySideBar: List Files` | 递归列出文件 |
-| `MySideBar: Move Listed To Trash` | 将列表中选中项移入回收站 |
-| `MySideBar: Copy Listed Paths` | 复制列表中选中项的完整路径 |
-| `MySideBar: Open Listed File` | 打开列表中选中的文件 |
-| `MySideBar: Convert Encoding` | 批量转换编码 |
-| `MySideBar: UI Language - ...` | 切换界面语言 |
+| `MySideBar: List Files` | Recursively list files |
+| `MySideBar: Move Listed To Trash` | Move the selected items in the list to the trash |
+| `MySideBar: Copy Listed Paths` | Copy full paths of the selected items in the list |
+| `MySideBar: Open Listed File` | Open the selected file in the list |
+| `MySideBar: Convert Encoding` | Batch convert encodings |
+| `MySideBar: UI Language - ...` | Switch the UI language |
 
 ---
 
-## 平台说明
+## Platform notes
 
-| 平台 | 回收站实现 |
+| Platform | Trash implementation |
 |---|---|
-| macOS | 通过 `ctypes` 调用 `NSFileManager.trashItemAtURL:`，无需安装 PyObjC |
-| Windows | 调用 `SHFileOperationW`（`FO_DELETE` + `FOF_ALLOWUNDO`） |
-| Linux | 调用 `gio trash`，未安装 `gio` 时该功能不可用 |
+| macOS | `NSFileManager.trashItemAtURL:` invoked via `ctypes` — no PyObjC needed |
+| Windows | `SHFileOperationW` (`FO_DELETE` + `FOF_ALLOWUNDO`) |
+| Linux | `gio trash`; unavailable when `gio` is not installed |
 
-剪贴板（`Cut` / `Copy` / `Paste`）为插件会话内队列，不写入系统剪贴板，跨会话不保留，这是有意设计，用于安全地在项目内移动文件或目录。
+The clipboard (`Cut` / `Copy` / `Paste`) is an in-plugin-session queue — it does not write to the system clipboard and does not persist across sessions. This is intentional, for safely moving files or directories within a project.
 
 ---
 
-## 快捷键
+## Key bindings
 
-| 按键 | 作用范围 |
+| Key | Scope |
 |---|---|
-| `Enter` | 仅在 `List Files` 生成的列表视图中，打开当前行对应文件 |
+| `Enter` | Only in the list view produced by `List Files` — opens the file on the current row |
 
 ---
 
-## 许可
+## License
 
-见 [LICENSE](./LICENSE)。
+See [LICENSE](./LICENSE).
