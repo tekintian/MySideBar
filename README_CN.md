@@ -108,6 +108,10 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 ## 安装
 
 > **注意**：插件包根是仓库的 `src/` 目录，`MySideBar.py` 等入口文件直接位于 `src/` 根层。仓库根另有 `packages.json`（Package Control 清单）、`tools/`（打包与发版脚本）、`tests/`（校验脚本）与 `docs/`（开发文档），这些都不属于插件运行时文件。
+>
+> 本 README 是面向开发者的完整文档。面向用户的精简文档随插件发布，位于 [`src/README.md`](./src/README.md)（English）与 [`src/README_CN.md`](./src/README_CN.md)（中文）——用户在 `main` 分支和 release 压缩包里看到的就是它。改动用户可见行为时，两处需同步更新。
+>
+> 发布布局：`dev` 是开发分支，`main` 是由 CI 生成的产品分支。每次 release 时 CI 会把 `src/` 镜像到 `main` 并扁平化到仓库根目录，强制覆盖整条分支。请勿直接向 `main` 提交。
 
 推荐的安装方式是 Package Control（`Add Repository` + `Install Package`），或使用下述手动方式。
 

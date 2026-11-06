@@ -107,6 +107,10 @@ The read-only list view produced by `List Files` supports:
 ## Installation
 
 > **Note**: the plugin package root is the `src/` directory — entry files such as `MySideBar.py` sit directly at the `src/` top level. The repo root also holds `packages.json` (the Package Control manifest), `tools/` (build and release scripts), `tests/` (validation scripts) and `docs/`; none of these are part of the running plugin.
+>
+> This README is the full developer-facing document. The end-user documentation ships with the plugin and lives at [`src/README.md`](./src/README.md) (English) and [`src/README_CN.md`](./src/README_CN.md) (中文) — it is the version users see on the `main` branch and inside the release archive. Keep both in sync when you change user-facing behavior.
+>
+> Release layout: `dev` is the development branch; `main` is a generated product branch. On every release, CI mirrors `src/` into `main`, flattened to the repository root, and force-overwrites the whole branch. Never commit to `main` directly.
 
 The recommended install method is Package Control (`Add Repository` + `Install Package`), or use one of the manual methods below.
 
