@@ -1,4 +1,14 @@
 
+
+add repository输入以下地址即可
+https://raw.githubusercontent.com/tekintian/MySideBar/refs/heads/dev/src/packages.json
+
+
+
+https://api.github.com/repos/tekintian/MySideBar/branches/dev
+
+
+
 ## 文档
 
 开发文档位于 `docs/`（不随发布版本分发）：
