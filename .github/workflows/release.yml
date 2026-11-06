@@ -131,7 +131,7 @@ jobs:
 
           mkdir -p main && cd main
           git init -q -b main .
-          git remote add origin "https://github.com/${REPO}.git"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
 
           cp -R ../dev/src/. .
           rm -f packages.json
