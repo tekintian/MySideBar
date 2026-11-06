@@ -24,7 +24,7 @@
 					},
 					{ "caption": "Reapply Menus", "command": "my_sidebar_apply_menus" },
 					{ "caption": "-" },
-					{ "caption": "Encoding Doctor", "command": "mysidebar_encoding_doctor" }
+					{ "caption": "Encoding Doctor", "command": "my_sidebar_encoding_doctor" }
 				]
 			},
 			{ "caption": "-", "id": "my_sidebar_end" }

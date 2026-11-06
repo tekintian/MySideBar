@@ -34,6 +34,13 @@ def _supported_encodings():
         return []
 
 
+def _auto_locale(settings):
+    raw = settings.get("encoding_auto_locales", encodings.DEFAULT_LOCALE)
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return encodings.DEFAULT_LOCALE
+
+
 def _describe_view(lines, view, tag):
     lines.append("[%s]" % tag)
     try:
@@ -96,7 +103,9 @@ def _probe_file(lines, path):
         lines.append("  head bytes = %r" % head)
     except Exception:
         lines.append("  read failed")
-    detected = encoding_detect.detect(path)
+    detected = encoding_detect.detect(
+        path, _auto_locale(sublime.load_settings("MySideBar.sublime-settings"))
+    )
     lines.append("  detect()   = %r" % detected)
     try:
         with open(path, "rb") as fp:
@@ -213,7 +222,7 @@ class MysidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
             lines.append("  encoding_status_bar  = %r" % settings.get("encoding_status_bar"))
             raw_locale = settings.get("encoding_auto_locales", encodings.DEFAULT_LOCALE)
             if isinstance(raw_locale, str) and raw_locale.strip():
-                locale = raw_locale
+                locale = raw_locale.strip()
         except Exception:
             lines.append("  settings load failed")
         lines.append("")
@@ -268,8 +277,8 @@ class MysidebarEncodingDoctorCommand(sublime_plugin.WindowCommand):
         self._open_report(path)
 
     def _try_reopen(self, path, detected):
-        if detected is None:
-            return "skip: detect returned None"
+        if not isinstance(detected, str):
+            return "skip: detect returned %r" % (detected,)
         window = self.window or sublime.active_window()
         if window is None:
             return "skip: no window"

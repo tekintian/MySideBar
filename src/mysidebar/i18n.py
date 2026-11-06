@@ -12,7 +12,6 @@ _MENU_TARGETS = (
     "Side Bar.sublime-menu",
     "Tab Context.sublime-menu",
     "Tab Sidebar Context.sublime-menu",
-    "Context.sublime-menu",
 )
 
 _STALE_MENU_TARGETS = (
@@ -94,6 +93,9 @@ def _ensure_backup(name, src_path):
             os.makedirs(_backup_dir())
         with open(src_path, "r", encoding="utf-8") as fp:
             original = fp.read()
+        if not _backup_matches(original):
+            _report("menu source not pristine, backup skipped: %s" % name)
+            return False
         with open(backup, "w", encoding="utf-8") as fp:
             fp.write(original)
         return True
@@ -103,18 +105,14 @@ def _ensure_backup(name, src_path):
 
 
 def _restore_menu(name):
-    backup = _backup_path(name)
-    if not os.path.isfile(backup):
+    path = os.path.join(_user_menu_dir(), name)
+    if not os.path.isfile(path):
         return False
-    dst = os.path.join(_pkg_root(), name)
     try:
-        with open(backup, "r", encoding="utf-8") as fp:
-            original = fp.read()
-        with open(dst, "w", encoding="utf-8") as fp:
-            fp.write(original)
+        os.remove(path)
         return True
     except OSError as exc:
-        _report("menu restore failed %s: %s" % (name, exc))
+        _report("menu overlay remove failed %s: %s" % (name, exc))
         return False
 
 
@@ -124,6 +122,16 @@ def _restore_all_menus():
         if _restore_menu(name):
             restored += 1
     return restored
+
+
+def _backup_matches(source):
+    try:
+        data = json.loads(source)
+    except ValueError:
+        return False
+    once = _transform_menu(data, False)
+    twice = _transform_menu(once, False)
+    return once == twice
 
 
 def apply_menu(force=False):
@@ -165,7 +173,9 @@ def apply_menu(force=False):
             _report("menu became empty after transform: %s" % name)
             continue
         try:
-            with open(src, "w", encoding="utf-8") as fp:
+            if not os.path.isdir(_user_menu_dir()):
+                os.makedirs(_user_menu_dir())
+            with open(os.path.join(_user_menu_dir(), name), "w", encoding="utf-8") as fp:
                 json.dump(transformed, fp, ensure_ascii=False, indent="\t")
                 fp.write("\n")
             written += 1
@@ -173,8 +183,6 @@ def apply_menu(force=False):
             _report("menu write failed %s: %s" % (name, exc))
 
     try:
-        if not os.path.isdir(_user_menu_dir()):
-            os.makedirs(_user_menu_dir())
         with open(marker, "w", encoding="utf-8") as fp:
             fp.write(_signature())
     except OSError as exc:

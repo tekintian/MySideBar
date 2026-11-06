@@ -329,6 +329,18 @@ class MySidebarListFilesBase(sublime_plugin.WindowCommand):
         return bool(_line_map(view))
 
 
+class MySidebarListFilesContextListener(sublime_plugin.EventListener):
+    def on_query_context(self, view, key, operator, operand, match_all):
+        if key != FLAG_KEY:
+            return None
+        actual = bool(view.settings().get(FLAG_KEY, False))
+        if operator == sublime.OP_EQUAL:
+            return actual == bool(operand)
+        if operator == sublime.OP_NOT_EQUAL:
+            return actual != bool(operand)
+        return None
+
+
 class MySidebarListFilesTrashCommand(MySidebarListFilesBase):
     def run(self):
         paths = self._paths()
