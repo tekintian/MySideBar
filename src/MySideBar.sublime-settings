@@ -6,5 +6,6 @@
 	"encoding_status_bar": true,
 	"search_result_limit": 5000,
 	"exclude_dirs_for_search": [".git", "node_modules", "vendor", "dist", "build"],
+	"exclude_files_for_search": [".DS_Store", "Thumbs.db", "desktop.ini", "._*"],
 	"confirm_before_trash": true
 }

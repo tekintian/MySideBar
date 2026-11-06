@@ -101,6 +101,9 @@ STRINGS = {
         "search.truncated": "Result limited to {limit} files.",
         "search.no_selection": "Select one or more lines in the result view first.",
         "search.copied": "Copied {count} path(s).",
+        "search.header_path": "Current Path:",
+        "search.header_list": "File List:",
+        "search.open_caption": "Open Listed File",
 
         "tab.reveal.caption": "Reveal In File Manager",
         "tab.copy_path.caption": "Copy Path",
@@ -218,6 +221,9 @@ STRINGS = {
         "search.truncated": "结果已截断至 {limit} 个文件。",
         "search.no_selection": "请先在结果视图中选中至少一行。",
         "search.copied": "已复制 {count} 个路径。",
+        "search.header_path": "当前路径：",
+        "search.header_list": "文件列表：",
+        "search.open_caption": "打开列表中的文件",
 
         "tab.reveal.caption": "在文件管理器中定位",
         "tab.copy_path.caption": "复制完整路径",
@@ -335,6 +341,9 @@ STRINGS = {
         "search.truncated": "結果已截斷至 {limit} 個檔案。",
         "search.no_selection": "請先在結果檢視中選取至少一行。",
         "search.copied": "已複製 {count} 個路徑。",
+        "search.header_path": "目前路徑：",
+        "search.header_list": "檔案清單：",
+        "search.open_caption": "開啟清單中的檔案",
 
         "tab.reveal.caption": "在檔案總管中定位",
         "tab.copy_path.caption": "複製完整路徑",

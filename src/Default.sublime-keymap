@@ -1,0 +1,9 @@
+[
+	{
+		"keys": ["enter"],
+		"command": "my_sidebar_search_open",
+		"context": [
+			{ "key": "my_sidebar_search_result", "operator": "equal", "operand": true }
+		]
+	}
+]

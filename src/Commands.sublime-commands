@@ -2,6 +2,7 @@
 	{ "caption": "MySideBar: List Files", "command": "my_sidebar_search_files" },
 	{ "caption": "MySideBar: Move Listed To Trash", "command": "my_sidebar_search_trash" },
 	{ "caption": "MySideBar: Copy Listed Paths", "command": "my_sidebar_search_copy" },
+	{ "caption": "MySideBar: Open Listed File", "command": "my_sidebar_search_open" },
 	{ "caption": "-" },
 	{ "caption": "MySideBar: Convert Encoding", "command": "my_sidebar_convert_encoding" },
 	{ "caption": "-" },
