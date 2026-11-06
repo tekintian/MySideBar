@@ -5,3 +5,4 @@ t.sh
 __pycache__/
 *.pyc
 .DS_Store
+src/package-metadata.json

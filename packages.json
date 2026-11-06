@@ -7,6 +7,8 @@
             "labels": [
                 "sidebar",
                 "encoding",
+                "gbk",
+                "chinese",
                 "file management",
                 "i18n"
             ],
@@ -15,7 +17,7 @@
                     "sublime_text": ">=4000",
                     "platforms": ["*"],
                     "version": "1.0.0",
-                    "url": "https://github.com/tekintian/MySideBar/releases/download/1.0.0/MySideBar-1.0.0.zip",
+                    "url": "https://github.com/tekintian/MySideBar/releases/download/v1.0.0/MySideBar-1.0.0.zip",
                     "date": "2026-11-06 00:00:00",
                     "sha256": ""
                 }

@@ -105,9 +105,77 @@ GB18030 / Big5 编码的中文文件在 ST 中打开常显示为乱码方块。�
 
 ---
 
+## 发布流程
+
+`dev` 是唯一的开发分支，`main` 是由 CI 单向生成的产品分支，不承载任何手工改动。
+
+### 分支与职责
+
+| 分支 | 内容 | 谁写入 |
+|---|---|---|
+| `dev` | 开发分支。插件源码在 `src/`，另有 `docs/`、`tests/`、`tools/` 与完整开发文档 | 开发者手工提交 |
+| `main` | 产品分支。`src/` 的内容扁平化到仓库根，外加 CI 生成的 `packages.json` | 仅 CI，每次发版强制覆盖 |
+
+### 发版步骤
+
+1. **同步版本号**。两处必须与即将打的 tag 一致（tag 去掉 `v` 前缀）：
+
+   | 文件 | 内容 |
+   |---|---|
+   | `src/meta.py` | `__version__ = '1.0.1'` |
+   | `src/messages/install.txt` | 首行 `MySideBar 1.0.1 - Installation` |
+
+   CI 会校验这两处，不一致直接失败，不会产出错误的发布包。
+
+2. **提交并推送 dev**：
+
+   ```bash
+   git add -A && git commit -m "chore: 版本号 1.0.1"
+   git push origin dev
+   ```
+
+3. **打 tag 并推送**。tag 必须带 `v` 前缀且为三段数字：
+
+   ```bash
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+
+4. **等待 CI 完成两个 job**：
+
+   | Job | 做什么 |
+   |---|---|
+   | `release` | 校验版本号 → 校验发布文档 → 打包（排除 `.DS_Store`、`__pycache__`）→ 发布 Release（zip + `SHA256SUMS.txt`） |
+   | `sync-main` | 把 `src/` 镜像到 `main` 根目录 → 用 `SHA256SUMS.txt` 里的 hash 生成 `packages.json` → `git push --force origin HEAD:main` |
+
+5. **验证 main**。`packages.json` 的几个字段是 ST 能否正确安装的关键：
+
+   | 字段 | 必须是 |
+   |---|---|
+   | `details` | `https://github.com/tekintian/MySideBar/blob/main/packages.json`（不能是仓库主页） |
+   | `version` | 纯数字 `1.0.1`，**不带** `v` |
+   | `url` | 指向该项 Release 的 zip，与资产名完全一致 |
+   | `sha256` | 取自 `SHA256SUMS.txt`，与用户下载的 zip 一致 |
+
+### 关键约束
+
+- **tag 必须带 `v`**。GitHub Actions 的 `tags` 匹配是 glob 通配符而非正则，glob 无法表达"恰好三段数字"，所以 workflow 用 `v*` 触发，再在脚本里用正则 `v[0-9]+\.[0-9]+\.[0-9]+$` 精确校验。非法 tag（如 `v1.0`、`v1.0.1-beta`）会让 job 明确报错退出，不会静默跳过。
+- **`version` 字段不带 `v`**。ST 的版本比较对 `v` 前缀不友好，所以 tag 是 `v1.0.1`，而包内版本号、zip 文件名、`packages.json` 的 `version` 都是 `1.0.1`。
+- **不要手工改 `main`**。`sync-main` 用 `--force` 推送，且每次都在干净目录里新建仓库、全量复制，任何手工提交都会在下次发版时被完整覆盖。
+- **历史 tag 不要混用格式**。旧的 `1.0.0`（无 `v`）已删除并重打为 `v1.0.0`，后续一律 `v` 前缀。
+- **补发某个版本**可用手动触发，无需重打 tag：
+
+  ```bash
+  gh workflow run release --ref dev -f tag=v1.0.1
+  ```
+
+---
+
 ## 安装
 
-> **注意**：插件包根是仓库的 `src/` 目录，`MySideBar.py` 等入口文件直接位于 `src/` 根层。仓库根另有 `packages.json`（Package Control 清单）、`tools/`（打包与发版脚本）、`tests/`（校验脚本）与 `docs/`（开发文档），这些都不属于插件运行时文件。
+> **注意**：插件包根是仓库的 `src/` 目录，`MySideBar.py` 等入口文件直接位于 `src/` 根层。仓库根另有 `tools/`（打包与发版脚本）、`tests/`（校验脚本）与 `docs/`（开发文档），这些都不属于插件运行时文件。
+>
+> 仓库根的 `packages.json` 是**过期的历史残留**，不要使用也不要修改：真正生效的清单由 CI 在每次发版时生成到 `main` 分支根目录。
 >
 > 本 README 是面向开发者的完整文档。面向用户的精简文档随插件发布，位于 [`src/README.md`](./src/README.md)（English）与 [`src/README_CN.md`](./src/README_CN.md)（中文）——用户在 `main` 分支和 release 压缩包里看到的就是它。改动用户可见行为时，两处需同步更新。
 >
