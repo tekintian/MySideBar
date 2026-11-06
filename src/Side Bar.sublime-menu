@@ -11,6 +11,6 @@
 	{ "caption": "Move To", "command": "my_sidebar_move", "args": {"paths": []} },
 	{ "caption": "Move To Trash", "command": "my_sidebar_move_to_trash", "args": {"paths": []} },
 	{ "caption": "-" },
-	{ "caption": "List Files", "command": "my_sidebar_search_files", "args": {"paths": []} },
+	{ "caption": "List Files", "command": "my_sidebar_list_files", "args": {"paths": []} },
 	{ "caption": "Convert Encoding", "command": "my_sidebar_convert_encoding", "args": {"paths": []} }
 ]

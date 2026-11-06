@@ -136,10 +136,23 @@ class SideBarProject(object):
         return best
 
     def relative_path(self, path):
+        target = plat.normalize(path)
+        for folder in self.folders():
+            if plat.same_path(target, folder):
+                return "."
         root = self.find_root(path)
         if root is None:
             return None
         return plat.rel_path(path, root)
+
+    def is_root_or_within(self, path):
+        target = plat.normalize(path)
+        for folder in self.folders():
+            if plat.same_path(target, folder):
+                return True
+            if plat.is_within(target, folder):
+                return True
+        return False
 
 
 class ViewResolver(object):

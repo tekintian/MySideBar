@@ -205,12 +205,14 @@ class MySidebarCopyRelativePathCommand(sublime_plugin.WindowCommand):
             clipboard.set_clipboard_text("\n".join(lines))
         if missing:
             _status(self.window, i18n.t("clipboard.relative_path.skipped", count=missing))
+        elif not lines:
+            _status(self.window, i18n.t("clipboard.relative_path.failed_all"))
 
     def is_visible(self, paths=None):
         if not paths:
             return False
         project = SideBarProject(self.window)
-        return any(project.find_root(p) is not None for p in paths)
+        return any(project.is_root_or_within(p) for p in paths)
 
 
 class MySidebarCopyFileNameCommand(sublime_plugin.WindowCommand):

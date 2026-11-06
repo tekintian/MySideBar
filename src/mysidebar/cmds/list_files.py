@@ -9,8 +9,12 @@ from .. import platform as plat
 
 
 DEFAULT_LIMIT = 5000
-LINES_KEY = "my_sidebar_search_lines"
-FLAG_KEY = "my_sidebar_search_result"
+LINES_KEY = "my_sidebar_list_files_lines"
+FLAG_KEY = "my_sidebar_list_files_result"
+
+FORMAT_RELATIVE = "relative"
+FORMAT_ABSOLUTE = "absolute"
+DEFAULT_FORMAT = FORMAT_RELATIVE
 
 DEFAULT_EXCLUDE_FILES = (".DS_Store", "Thumbs.db", "desktop.ini", "._")
 
@@ -26,7 +30,7 @@ def _settings():
 
 def _limit():
     try:
-        value = int(_settings().get("search_result_limit", DEFAULT_LIMIT))
+        value = int(_settings().get("list_files_result_limit", DEFAULT_LIMIT))
     except (TypeError, ValueError):
         return DEFAULT_LIMIT
     if value <= 0:
@@ -34,8 +38,20 @@ def _limit():
     return value
 
 
+def _format():
+    raw = _settings().get("list_files_result_format", DEFAULT_FORMAT)
+    if not isinstance(raw, str):
+        return DEFAULT_FORMAT
+    text = raw.strip().lower()
+    if text == FORMAT_ABSOLUTE:
+        return FORMAT_ABSOLUTE
+    if text == FORMAT_RELATIVE:
+        return FORMAT_RELATIVE
+    return DEFAULT_FORMAT
+
+
 def _excludes():
-    raw = _settings().get("exclude_dirs_for_search", [])
+    raw = _settings().get("list_files_exclude_dirs", [])
     if not isinstance(raw, list):
         return set()
     result = set()
@@ -49,7 +65,7 @@ def _excludes():
 
 
 def _exclude_files():
-    raw = _settings().get("exclude_files_for_search", None)
+    raw = _settings().get("list_files_exclude_files", None)
     if not isinstance(raw, list):
         raw = list(DEFAULT_EXCLUDE_FILES)
     exact = set()
@@ -131,15 +147,16 @@ def _selected_paths(window):
     return paths
 
 
-class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
+class MySidebarListFilesCommand(sublime_plugin.WindowCommand):
     def run(self, paths=None):
         roots = self._roots(paths)
         if not roots:
-            _status(self.window, "search.no_root")
+            _status(self.window, "list_files.no_root")
             return
         self._root_dirs = roots
         self._excludes = _excludes()
         self._exclude_exact, self._exclude_prefixes = _exclude_files()
+        self._format = _format()
         self._limit = _limit()
         self._truncated = False
         self._total = 0
@@ -165,12 +182,13 @@ class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
             view = self.window.new_file()
             view.set_scratch(True)
             view.settings().set(FLAG_KEY, True)
-            view.set_name(i18n.t("search.result_title"))
+            view.set_name(i18n.t("list_files.result_title"))
         view.set_read_only(False)
         view.run_command("select_all")
         view.run_command("right_delete")
-        header = self._header_lines(roots)
-        view.run_command("append", {"characters": "\n".join(header) + "\n"})
+        if self._format == FORMAT_RELATIVE:
+            header = self._header_lines(roots)
+            view.run_command("append", {"characters": "\n".join(header) + "\n"})
         view.set_read_only(True)
         view.settings().set(LINES_KEY, {})
         view.settings().erase("result_file_regex")
@@ -178,11 +196,11 @@ class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
         return view
 
     def _header_lines(self, roots):
-        lines = [i18n.t("search.header_path")]
+        lines = [i18n.t("list_files.header_path")]
         for root in roots:
             lines.append("  %s" % root)
         lines.append("")
-        lines.append(i18n.t("search.header_list"))
+        lines.append(i18n.t("list_files.header_list"))
         return lines
 
     def _walk_all(self):
@@ -212,6 +230,11 @@ class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
                     self._truncated = True
                     return
 
+    def _display_text(self, rel, path):
+        if self._format == FORMAT_ABSOLUTE:
+            return path
+        return rel
+
     def _flush(self):
         if not self._entries:
             return
@@ -222,14 +245,17 @@ class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
         mapping = view.settings().get(LINES_KEY, {})
         if not isinstance(mapping, dict):
             mapping = {}
-        batch = sorted(self._entries, key=lambda entry: entry[0].lower())
+        batch = sorted(
+            self._entries,
+            key=lambda entry: self._display_text(entry[0], entry[1]).lower(),
+        )
         self._entries = []
         keys = []
         for rel, path in batch:
-            unique = rel
+            unique = self._display_text(rel, path)
             suffix = 2
             while unique in mapping:
-                unique = "%s  (%d)" % (rel, suffix)
+                unique = "%s  (%d)" % (self._display_text(rel, path), suffix)
                 suffix += 1
             mapping[unique] = path
             keys.append(unique)
@@ -240,15 +266,25 @@ class MySidebarSearchFilesCommand(sublime_plugin.WindowCommand):
 
     def _done(self):
         self._flush()
-        _status(self.window, "search.done", count=self._total)
+        if not self._total:
+            self._write_empty_notice()
+        _status(self.window, "list_files.done", count=self._total)
         if self._truncated:
-            _status(self.window, "search.truncated", limit=self._limit)
+            _status(self.window, "list_files.truncated", limit=self._limit)
+
+    def _write_empty_notice(self):
+        view = self._view
+        if view is None or not view.is_valid():
+            return
+        view.set_read_only(False)
+        view.run_command("append", {"characters": i18n.t("list_files.empty") + "\n"})
+        view.set_read_only(True)
 
     def is_visible(self, paths=None):
         return True
 
 
-class MySidebarSearchOpenCommand(sublime_plugin.WindowCommand):
+class MySidebarListFilesOpenCommand(sublime_plugin.WindowCommand):
     def run(self):
         window = self.window
         view = _source_view(window)
@@ -261,7 +297,7 @@ class MySidebarSearchOpenCommand(sublime_plugin.WindowCommand):
                 continue
             window.open_file(path)
             return
-        _status(window, "search.no_selection")
+        _status(window, "list_files.no_selection")
 
     def is_visible(self):
         return self.is_enabled()
@@ -279,7 +315,7 @@ class MySidebarSearchOpenCommand(sublime_plugin.WindowCommand):
         return False
 
 
-class MySidebarSearchBase(sublime_plugin.WindowCommand):
+class MySidebarListFilesBase(sublime_plugin.WindowCommand):
     def _paths(self):
         return _selected_paths(self.window)
 
@@ -293,20 +329,20 @@ class MySidebarSearchBase(sublime_plugin.WindowCommand):
         return bool(_line_map(view))
 
 
-class MySidebarSearchTrashCommand(MySidebarSearchBase):
+class MySidebarListFilesTrashCommand(MySidebarListFilesBase):
     def run(self):
         paths = self._paths()
         if not paths:
-            _status(self.window, "search.no_selection")
+            _status(self.window, "list_files.no_selection")
             return
         self.window.run_command("my_sidebar_move_to_trash", {"paths": paths})
 
 
-class MySidebarSearchCopyCommand(MySidebarSearchBase):
+class MySidebarListFilesCopyCommand(MySidebarListFilesBase):
     def run(self):
         paths = self._paths()
         if not paths:
-            _status(self.window, "search.no_selection")
+            _status(self.window, "list_files.no_selection")
             return
         sublime.set_clipboard("\n".join(paths))
-        _status(self.window, "search.copied", count=len(paths))
+        _status(self.window, "list_files.copied", count=len(paths))
