@@ -150,7 +150,7 @@ jobs:
               "packages": [
                   {
                       "name": "MySideBar",
-                      "details": "https://github.com/%s/blob/main/packages.json" % repo,
+                      "details": "https://github.com/%s/" % repo,
                       "labels": ["sidebar", "encoding", "file management", "i18n"],
                       "releases": [
                           {

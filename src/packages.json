@@ -3,23 +3,23 @@
     "packages": [
         {
             "name": "MySideBar",
-            "details": "https://github.com/tekintian/MySideBar/blob/main/packages.json",
+            "details": "https://github.com/tekintian/MySideBar",
             "labels": [
                 "sidebar",
                 "encoding",
+                "gbk",
+                "chinese",
                 "file management",
                 "i18n"
             ],
             "releases": [
                 {
                     "sublime_text": ">=4000",
-                    "platforms": [
-                        "*"
-                    ],
+                    "platforms": ["*"],
                     "version": "1.0.0",
-                    "url": "https://github.com/tekintian/MySideBar/releases/download/1.0.0/MySideBar-1.0.0.zip",
-                    "date": "2026-11-06 14:50:29",
-                    "sha256": "cd2aed1261f46f0650c7597fc1e2f2918c800a2d33d102be6d5b03c5f225dab8"
+                    "url": "https://github.com/tekintian/MySideBar/releases/download/v1.0.0/MySideBar-1.0.0.zip",
+                    "date": "2026-11-06 00:00:00",
+                    "sha256": ""
                 }
             ]
         }
